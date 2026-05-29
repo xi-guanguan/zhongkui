@@ -1,0 +1,14 @@
+.build/
+dist/
+.tmp/
+.cli/
+.agent/
+.claude/
+.emmylua/
+engine-docs/
+examples/
+templates/
+urhox-libs/
+schemas/
+scripts/
+logs/

@@ -1,0 +1,612 @@
+# 程序化 NanoVG 渲染完整指南
+
+> 整合三大核心能力：Yoga+NanoVG 引擎渲染架构、程序化生成方法论、矢量图标设计范式。
+> 面向使用 NanoVG 进行程序化内容绘制的完整技术参考。
+
+---
+
+## 一、架构总览
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     渲染管线                                  │
+├─────────────────────────────────────────────────────────────┤
+│  Yoga Flexbox     → 布局计算（位置、尺寸、对齐）            │
+│  NanoVG           → 像素级绘制（颜色、渐变、路径、文字）    │
+│  程序化生成       → 内容驱动（公式 + 参数 → 动态图形）      │
+├─────────────────────────────────────────────────────────────┤
+│  衔接点: Widget.Render(nvg)                                  │
+│  Yoga 算好绝对坐标 → GetAbsoluteLayout() → NanoVG 绘制     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**核心思维**：程序化生成的本质是用 **公式 + 少量参数** 替代 **手工数据 + 美术资源**。
+
+```
+输入（种子/时间/游戏状态）→ 数学变换 → NanoVG 路径/颜色/形状 → 屏幕像素
+```
+
+---
+
+## 二、自定义控件模式
+
+### 模式 A：继承 Widget（复杂控件/可复用）
+
+```lua
+local UI = require("urhox-libs/UI")
+local MyWidget = UI.Widget:Extend("MyWidget")
+
+function MyWidget:Init(props)
+    UI.Widget.Init(self, props)  -- 必须先调父类
+    self._value = props.value or 0
+end
+
+function MyWidget:Render(nvg)
+    self:RenderFullBackground(nvg)
+    local l = self:GetAbsoluteLayout()
+    local x, y, w, h = l.x, l.y, l.w, l.h
+    if w <= 0 or h <= 0 then return end
+
+    nvgSave(nvg)
+    nvgIntersectScissor(nvg, x, y, w, h)
+    -- 在 [x, y, w, h] 内绘制内容...
+    nvgRestore(nvg)
+end
+```
+
+### 模式 B：覆写 Panel.Render（一次性图标/装饰）
+
+```lua
+local panel = UI.Panel { width = 32, height = 32, flexShrink = 0 }
+local _base = panel.Render
+
+panel.Render = function(self, nvg)
+    if _base then _base(self, nvg) end
+    local l = self:GetAbsoluteLayout()
+    if not l or l.w <= 0 then return end
+    local cx, cy = l.x + l.w * 0.5, l.y + l.h * 0.5
+    -- 绘制...
+end
+```
+
+### 统一图标接口
+
+所有程序化图标遵循同一签名：
+
+```lua
+---@param vg    userdata  NanoVG 上下文
+---@param cx    number    中心 X
+---@param cy    number    中心 Y
+---@param size  number    图标尺寸（正方形边长）
+---@param color table     {r, g, b, a}
+function draw(vg, cx, cy, size, color)
+    local s = size * 0.5  -- 半径参考值
+    -- 所有坐标相对 (cx, cy) 偏移，保持 size 约束内
+end
+```
+
+---
+
+## 三、坐标系统与变换
+
+```lua
+-- 从 Yoga 布局取绝对坐标
+local l = self:GetAbsoluteLayout()
+local x, y, w, h = l.x, l.y, l.w, l.h
+local cx = x + w * 0.5   -- 水平中心
+local cy = y + h * 0.5   -- 垂直中心
+local r  = math.min(w, h) * 0.5  -- 内切圆半径
+
+-- 变换（必须 Save/Restore 配对）
+nvgSave(nvg)
+nvgTranslate(nvg, tx, ty)   -- 平移
+nvgRotate(nvg, angle)        -- 旋转（弧度）
+nvgScale(nvg, sx, sy)        -- 缩放
+nvgSkewX(nvg, angle)         -- 斜切
+nvgRestore(nvg)
+
+-- 突破裁剪区域
+nvgSave(nvg)
+nvgResetScissor(nvg)         -- 清除所有裁剪
+-- 不受限绘制（如外发光、飘字）
+nvgRestore(nvg)
+```
+
+---
+
+## 四、NanoVG 绘制原语
+
+### 颜色与渐变
+
+```lua
+-- 纯色
+nvgFillColor(nvg, nvgRGBA(r, g, b, a))
+nvgStrokeColor(nvg, nvgRGBA(r, g, b, a))
+
+-- 径向渐变（辉光/光晕）
+local grad = nvgRadialGradient(nvg, cx, cy, innerR, outerR,
+    nvgRGBA(r, g, b, innerAlpha), nvgRGBA(r, g, b, 0))
+nvgFillPaint(nvg, grad)
+
+-- 线性渐变（进度条/背景）
+local grad = nvgLinearGradient(nvg, x1, y1, x2, y2, colorA, colorB)
+nvgFillPaint(nvg, grad)
+```
+
+### 路径
+
+```lua
+nvgBeginPath(nvg)
+nvgRect(nvg, x, y, w, h)                  -- 矩形
+nvgRoundedRect(nvg, x, y, w, h, radius)   -- 圆角矩形
+nvgCircle(nvg, cx, cy, r)                  -- 圆
+nvgMoveTo(nvg, x1, y1)                     -- 起点
+nvgLineTo(nvg, x2, y2)                     -- 直线
+nvgBezierTo(nvg, cp1x, cp1y, cp2x, cp2y, ex, ey)  -- 贝塞尔
+nvgFill(nvg)   -- 填充
+nvgStroke(nvg) -- 描边
+
+-- 描边属性
+nvgStrokeWidth(nvg, 2.0)
+nvgLineCap(nvg, NVG_ROUND)   -- BUTT / ROUND / SQUARE
+nvgLineJoin(nvg, NVG_ROUND)
+```
+
+### 文字
+
+```lua
+nvgFontFace(nvg, "sans")
+nvgFontSize(nvg, 16)
+nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
+nvgText(nvg, x, y, "文字", nil)
+
+-- 斜体模拟
+nvgSave(nvg)
+nvgTranslate(nvg, cx, cy)
+nvgSkewX(nvg, -0.26)  -- 约15°右斜
+nvgText(nvg, 0, 0, "斜体", nil)
+nvgRestore(nvg)
+```
+
+### 图片
+
+```lua
+-- 加载（懒加载，只创建一次）
+local handle = nvgCreateImage(nvg, "Textures/icon.png", 0)
+local imgW, imgH = nvgImageSize(nvg, handle)
+
+-- 绘制
+local paint = nvgImagePattern(nvg, drawX, drawY, drawW, drawH, 0, handle, 1.0)
+nvgBeginPath(nvg)
+nvgRect(nvg, drawX, drawY, drawW, drawH)
+nvgFillPaint(nvg, paint)
+nvgFill(nvg)
+
+-- 染色
+local paint = nvgImagePatternTinted(nvg, drawX, drawY, drawW, drawH, 0, handle,
+    nvgRGBA(255, 200, 100, 200))
+```
+
+### 辉光技巧
+
+```lua
+-- 宽模糊底层 + 细实线顶层 = 发光效果
+nvgStrokeColor(nvg, nvgRGBA(r, g, b, 40))
+nvgStrokeWidth(nvg, lineWidth + 6)
+nvgStroke(nvg)   -- 辉光
+nvgStrokeColor(nvg, nvgRGBA(r, g, b, 200))
+nvgStrokeWidth(nvg, lineWidth)
+nvgStroke(nvg)   -- 主线
+```
+
+---
+
+## 五、程序化生成技术库
+
+### 5.1 确定性随机
+
+用固定种子保证「随机但稳定」：
+
+```lua
+math.randomseed(42)
+for i = 1, N do
+    positions[i] = { x = math.random(), y = math.random() }
+    phases[i] = math.random() * math.pi * 2
+end
+```
+
+**每帧重置种子**：位置不变 + 动画随时间变化：
+```lua
+-- 每帧
+math.randomseed(42)
+for i = 1, starCount do
+    local x, y = math.random(), math.random()
+    local blink = math.sin(time * math.random() * 2)
+    -- 位置固定，闪烁随 time 变化
+end
+```
+
+### 5.2 正弦波叠加
+
+最廉价的「活动感」：
+
+```lua
+output = baseline + amplitude * math.sin(time * frequency + phase)
+```
+
+| frequency 范围 | 感觉 |
+|---------------|------|
+| 0.05 - 0.2 | 呼吸/漂浮 |
+| 1 - 3 | 闪烁 |
+| 5+ | 震颤 |
+
+**打散策略**（防集体同步）：每个实例给独立的随机 phase 和/或 frequency。
+
+### 5.3 对象池
+
+预分配固定数组，循环复用：
+
+```lua
+function Pool:allocate()
+    -- 1. 找空闲槽
+    -- 2. 池满 → 淘汰最老的 → 重置并返回
+end
+
+function Pool:update(dt)
+    for i = 1, self.size do
+        if self.items[i].active then
+            self.items[i].life = self.items[i].life - dt
+            if self.items[i].life <= 0 then
+                self.items[i].active = false
+            end
+        end
+    end
+end
+```
+
+### 5.4 黄金角分布
+
+连续方向间偏转 ≈ 137.5°（2.4 rad），保证均匀不聚集：
+
+```lua
+local GOLDEN_ANGLE = 2.399  -- π × (3 - √5)
+angleOffset = angleOffset + GOLDEN_ANGLE
+
+for i = 1, count do
+    local angle = angleOffset + i / count * math.pi * 2
+    -- 发射方向
+end
+```
+
+### 5.5 HSV 色彩映射
+
+用进度驱动色相：
+
+```lua
+local progress = currentValue / maxValue  -- [0, 1]
+local hue = startHue + progress * (endHue - startHue)
+local r, g, b = hsvToRgb(hue, saturation, value)
+```
+
+分段映射更有层次：冷色(0-40%) → 中性(40-80%) → 暖色(80-100%)
+
+### 5.6 对数映射（大数可视化）
+
+```lua
+local normalized = math.min(math.log(value + 1) / math.log(maxRef), 1.0)
+local visual = minOutput + normalized * (maxOutput - minOutput)
+```
+
+### 5.7 缓动函数
+
+| 名称 | 公式 | 场景 |
+|------|------|------|
+| easeOutQuad | `1-(1-t)^2` | 弹窗弹出 |
+| easeOutCubic | `1-(1-t)^3` | 飞入动画 |
+| easeOutExpo | `1-2^(-10*t)` | 爆炸扩散 |
+| easeOutBack | 过冲回弹 | 按钮弹跳 |
+| easeInQuad | `t^2` | 蓄力 |
+
+**多阶段编排**：总时长切 N 段，每段独立缓动 + 延迟错位。
+
+### 5.8 Lissajous 曲线
+
+不重复的闭合/非闭合漂浮轨迹：
+
+```lua
+local x = Ax * math.sin(fx * t + px)
+local y = Ay * math.sin(fy * t + py)
+-- fx/fy 取无理数比 → 永不重复
+```
+
+### 5.9 低差异序列
+
+「看起来随机但分布均匀」的布局：
+
+```lua
+-- 互质乘法哈希（极简）
+local x = ((i * 37 + 13) % 100) / 100
+local y = ((i * 53 + 7) % 100) / 100
+```
+
+### 5.10 参数化几何
+
+用公式生成形状顶点：
+
+| 形状 | 公式 | 应用 |
+|------|------|------|
+| 圆/环 | `cos(θ)*r, sin(θ)*r` | 齿轮、轨道 |
+| 星形 | 交替内外半径 | 星芒、装饰 |
+| 螺旋 | `r + θ*k` 递增 | 漩涡、银河 |
+| 弧段 | 只画部分圆弧 | 进度环、虚线环 |
+| 贝塞尔 | 控制点曲线 | ∞符号、波形 |
+
+### 5.11 简化物理
+
+不用物理引擎，1-2 行代码模拟：
+
+```lua
+-- 速度衰减
+velocity = velocity * 0.97
+
+-- 重力
+vy = vy + gravity * dt
+
+-- 弹跳
+if y < ground then y = ground; vy = -vy * 0.7 end
+```
+
+### 5.12 数值配置生成
+
+公式批量生成数据表：
+
+```lua
+for level = 1, MAX do
+    config[level] = {
+        cost = baseCost * growthRate ^ (level - 1),
+        reward = baseReward * level ^ 0.8,
+    }
+end
+```
+
+---
+
+## 六、动画系统
+
+### UI 属性动画（引擎驱动）
+
+```lua
+widget:Animate({
+    keyframes = {
+        [0] = { backgroundColor = {95,68,210,255}, shadowBlur = 22 },
+        [1] = { backgroundColor = Theme.bgCard, shadowBlur = 8 },
+    },
+    duration = 0.55,
+    easing = "easeOut",
+    fillMode = "forwards",
+})
+```
+
+### NanoVG 手动动画（gameTime 驱动）
+
+```lua
+local breathTimer = 0
+
+function Module.Update(dt)
+    breathTimer = breathTimer + dt
+end
+
+function MyWidget:Render(nvg)
+    local breath = (math.sin(breathTimer * 1.8) + 1) * 0.5  -- 0~1
+    local alpha = math.floor(40 + breath * 50)
+    local ringR = baseR + breath * 18
+    -- 绘制呼吸动画...
+end
+```
+
+### 动态更新
+
+```lua
+label:SetText("新内容")              -- 最轻量
+label:SetFontColor({r,g,b,alpha})   -- 仅颜色
+widget:SetStyle({...})               -- 触发重排，谨慎高频
+widget:SetVisible(false)
+button:SetDisabled(true)
+```
+
+---
+
+## 七、图标设计范式
+
+### 设计原则
+
+1. **统一接口**：`draw(vg, cx, cy, size, color)` — 所有图标同一签名
+2. **参数化尺寸**：用 `s = size * 0.5` 作基准，所有坐标为相对偏移
+3. **单色传入**：外部传颜色，图标内部只负责形状
+4. **正方形约束**：所有图形在 size×size 范围内
+
+### 图标绘制模板
+
+```lua
+local function drawGear(vg, cx, cy, size, color)
+    local s = size * 0.5
+    local c = color
+
+    nvgSave(nvg)
+    nvgTranslate(nvg, cx, cy)
+
+    -- 中心圆
+    nvgBeginPath(vg)
+    nvgCircle(vg, 0, 0, s * 0.3)
+    nvgFillColor(vg, nvgRGBA(c[1], c[2], c[3], c[4] or 255))
+    nvgFill(vg)
+
+    -- 齿轮齿（参数化几何 §5.10）
+    local teeth = 6
+    for i = 1, teeth do
+        local angle = (i - 1) / teeth * math.pi * 2
+        local ax = math.cos(angle) * s * 0.55
+        local ay = math.sin(angle) * s * 0.55
+        nvgBeginPath(vg)
+        nvgCircle(vg, ax, ay, s * 0.15)
+        nvgFill(vg)
+    end
+
+    nvgRestore(nvg)
+end
+```
+
+### 集成到 UI 树
+
+```lua
+local Icons = require("UI.Icons")
+
+-- 方式 1：创建 Widget 嵌入 UI 树
+local iconWidget = Icons.CreateWidget(UI, "tab_tech", 28, {200,200,255,255})
+
+-- 方式 2：在 NanoVG Render 中直接调用
+Icons.draw(vg, "tab_tech", cx, cy, 28, {200,200,255,255})
+```
+
+### 图标参考清单
+
+| 类别 | 技巧组合 | 典型图形 |
+|------|---------|---------|
+| 简单几何 | 圆 + 矩形 | 锤子、铁砧 |
+| 辐射结构 | 参数化几何(§5.10) + 循环 | 齿轮、星芒、爆炸 |
+| 曲线符号 | 贝塞尔/弧段 | ∞符号、螺旋、波纹 |
+| 复合形状 | 多路径叠加 | 闪电、火焰、宝石 |
+| 动态图标 | 正弦(§5.2) + 时间 | 脉冲、呼吸光晕 |
+
+---
+
+## 八、组合模式
+
+### 模式 A：状态驱动视觉演化
+
+```
+进度 (0~1)
+  ├── HSV 色彩 (§5.5) → 图标/粒子颜色
+  ├── 对数尺寸 (§5.6) → 元素大小
+  ├── 正弦频率 (§5.2) → 呼吸速度
+  └── 缓动力度 (§5.7) → 弹跳幅度
+```
+
+### 模式 B：确定性背景 + 动态装饰
+
+```
+固定种子 (§5.1) → 星空位置（不变）
+时间驱动 (§5.2) → 闪烁/浮动（活的）
+```
+
+### 模式 C：池化实体 + 公式行为
+
+```
+对象池 (§5.3) → 生命周期管理
+黄金角 (§5.4) → 发射方向
+物理衰减(§5.11)→ 运动轨迹
+HSV (§5.5)    → 颜色随寿命变化
+```
+
+### 模式 D：分层绘制管线
+
+```lua
+function GameCanvas:Render(nvg)
+    -- 1. 静态背景（确定性随机 §5.1）
+    -- 2. 蒙版叠加
+    -- 3. 中景粒子（对象池 §5.3 + 物理 §5.11）
+    -- 4. 核心对象（参数化几何 §5.10 + HSV §5.5）
+    -- 5. UI 叠加（飘字、涟漪）
+    -- 6. 全屏特效（闪光、暗角）
+end
+```
+
+---
+
+## 九、Flexbox 布局要点
+
+```lua
+-- 固定尺寸元素必须防收缩
+UI.Panel { width = 44, height = 44, flexShrink = 0 }
+
+-- 填充剩余空间
+UI.Panel { flexGrow = 1 }
+
+-- 绝对定位叠加层（不拦截事件）
+UI.Panel {
+    position = "absolute",
+    top = 0, left = 0, right = 0, bottom = 0,
+    pointerEvents = "none",
+}
+
+-- 百分比尺寸
+UI.Panel { width = "100%", height = "50%" }
+```
+
+---
+
+## 十、性能备忘
+
+| 注意点 | 建议 |
+|--------|------|
+| nvgCreateImage / nvgCreateFont | 只调一次，缓存 handle |
+| sin/cos | 每帧几百次无压力；上万次考虑查表 |
+| 对象池大小 | 以最坏情况估算 |
+| SetStyle | 触发 Yoga 重排，高频时改用 SetText/SetFontColor |
+| nvgSave/Restore | 必须配对，泄漏会污染后续绘制 |
+| 几何顶点 | 动态生成控制在 < 500 顶点/帧 |
+| 尺寸检查 | Render 入口 `if w <= 0 or h <= 0 then return end` |
+
+---
+
+## 十一、决策流程图
+
+```
+需要绘制程序化内容？
+│
+├─ 它是 UI 控件吗？
+│   ├─ 可复用 → 模式 A（继承 Widget）
+│   └─ 一次性 → 模式 B（覆写 Panel.Render）
+│
+├─ 需要大量同类元素？
+│   ├─ 位置固定 → 确定性随机 (§5.1)
+│   ├─ 均匀分布 → 低差异序列 (§5.9) / 黄金角 (§5.4)
+│   └─ 有生命周期 → 对象池 (§5.3) + 简化物理 (§5.11)
+│
+├─ 需要随时间变化？
+│   ├─ 周期微动 → 正弦叠加 (§5.2)
+│   ├─ 不规则漂浮 → Lissajous (§5.8)
+│   └─ 单次过渡 → 缓动函数 (§5.7)
+│
+├─ 需要随游戏状态变化？
+│   ├─ 颜色 → HSV 映射 (§5.5)
+│   ├─ 大数可视化 → 对数映射 (§5.6)
+│   └─ 数值表 → 配置生成 (§5.12)
+│
+└─ 需要生成形状？
+    ├─ 规则几何 → 参数化几何 (§5.10)
+    ├─ 图标 → 统一接口 draw(vg, cx, cy, size, color)
+    └─ 自由曲线 → 贝塞尔 + 弧段 (§5.10)
+```
+
+---
+
+## 十二、常见错误
+
+| 错误 | 正确做法 |
+|------|----------|
+| Init 不调父类 | 必须先 `UI.Widget.Init(self, props)` |
+| Render 不检查尺寸 | `if w <= 0 or h <= 0 then return end` |
+| Save 后忘 Restore | 变换/裁剪泄漏到后续控件 |
+| 每帧 CreateImage/CreateFont | 只在初始化时创建一次 |
+| 绝对层不加 `pointerEvents="none"` | 拦截下层点击 |
+| 高频 SetStyle 改颜色 | 用 SetFontColor 或 NanoVG 直绘 |
+| 图标硬编码尺寸 | 用 `s = size * 0.5` 参数化 |
+| 粒子每帧 new | 用对象池预分配 |
+| 集体同步动画 | 给每个实例独立 phase/freq |
+| 大数直接映射到像素 | 用对数映射 (§5.6) 压缩 |
+
+---
+
+*最后更新: 2026-05-28*
