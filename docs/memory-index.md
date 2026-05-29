@@ -26,6 +26,7 @@
 | `design-discussion-02-procedural-art.md` | **设计讨论#02** — 程序化美术方案（Canvas 2D，仅 Q1 像素粒度未定） |
 | `design-discussion-03-economy.md` | **设计讨论#03** — 经济系统（投N币出N绳模型，基于原套牛代码） |
 | `design-discussion-04-mining-and-dialogue.md` | **设计讨论#04** — 打工/黄金矿工 + 孟婆对话（极简子系统） |
+| `codebuddy-task-cards.md` | **CodeBuddy 任务卡** — Phase 1(GLM5.1骨架7卡) + Phase 2(Kimi2.6美术6卡) |
 | `ui-style-pixelforge.md` | **UI 风格规范** — PixelForge 像素复古风（Canvas 2D 适配版） |
 | `比赛文件.txt` | 完整赛题规则（15KB） |
 | `调查报告.md` | 原代码调查分析 |
@@ -154,6 +155,17 @@
 | 堆叠精灵图 | 已加入美术文档§14.5（Sprite Stacking伪3D技法） |
 | 笑话系统 | **已彻底删除**（全部文档清理完毕） |
 
+### v0.6.0 CodeBuddy 任务卡 + 堆叠精灵图全局扩展
+
+| 项目 | 确认内容 |
+|------|---------|
+| 新文件 | `codebuddy-task-cards.md` — 完整两阶段任务卡 |
+| Phase 1 (GLM5.1) | T1.1~T1.7 骨架：项目初始化/核心循环/buff系统/孟婆商店/打工/持久化/集成 |
+| Phase 2 (Kimi2.6) | T2.1~T2.6 美术：像素角色/堆叠精灵图/场景/HUD/GameJuice/色板 |
+| 两阶段切模型 | 同一文件+代码库，GLM5.1→Kimi2.6 用 CodeBuddy 自带切换 |
+| 堆叠精灵图扩展 | 美术文档§14.5 从4种→8种对象；分类策略（静态/旋转/角色/动态）；8方向预渲染缓存 |
+| T2.2 覆盖范围 | 角色（钟馗8~12层/5鬼4~8层）+ 道具（铜钱/钩子/奶茶/锁链）+ 场景（柜台/灯笼） |
+
 ### 历史确认
 
 - 5 鬼阵容、基本换皮方向、8 阶段状态机保留
@@ -169,4 +181,4 @@
 
 - 认证 URL: `https://xi-guanguan:<TOKEN>@github.com/xi-guanguan/zhongkui.git`
 - 代理: `http://127.0.0.1:1080`
-- 最新 commit: `0300f43`
+- 最新 commit: `bfac81c`（本次 POST 后将更新）

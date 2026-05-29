@@ -3,9 +3,9 @@
 > AI 自维护，每次 POST 自动更新。详细规则见 memory-system skill。
 
 ## 当前状态
-- 版本: 0.5.6
-- 进度: 打工/黄金矿工+孟婆对话设计完成；笑话系统已彻底删除
-- 上次交付: `docs/design-discussion-04-mining-and-dialogue.md`（黄金矿工+孟婆对话极简设计）
+- 版本: 0.6.0
+- 进度: CodeBuddy 任务卡完成（Phase 1 骨架 7卡 + Phase 2 美术 6卡）；堆叠精灵图全局扩展
+- 上次交付: `docs/codebuddy-task-cards.md`（两阶段任务卡）+ 美术文档§14.5扩展
 
 ## 项目身份
 - 这是**策划区**，只写 `docs/`，实现代码由 CodeBuddy 在 GitHub 仓库完成
@@ -18,8 +18,8 @@
 - 角色: 总导演/决策者，把控方向
 
 ## 预测下一步
-- likely_next_task: 用户 review 黄金矿工+对话设计 → 确认/调参 → 整理任务卡给 CodeBuddy
-- 相关文件: docs/design-discussion-04-mining-and-dialogue.md
+- likely_next_task: 用户 review 任务卡 → 确认/调整 → 开始喂给 CodeBuddy（Phase 1 GLM5.1）
+- 相关文件: docs/codebuddy-task-cards.md
 
 ## 恢复指令（新会话必执行）
 1. 读本文件 → 获取项目状态和避雷清单
