@@ -3,9 +3,9 @@
 > AI 自维护，每次 POST 自动更新。详细规则见 memory-system skill。
 
 ## 当前状态
-- 版本: 0.5.4
-- 进度: 经济系统数值表 v4.1（整数化加成+百香果机制修正+好感经验曲线）
-- 上次交付: `docs/design-discussion-03-economy.md` v4.1
+- 版本: 0.5.6
+- 进度: 打工/黄金矿工+孟婆对话设计完成；笑话系统已彻底删除
+- 上次交付: `docs/design-discussion-04-mining-and-dialogue.md`（黄金矿工+孟婆对话极简设计）
 
 ## 项目身份
 - 这是**策划区**，只写 `docs/`，实现代码由 CodeBuddy 在 GitHub 仓库完成
@@ -18,8 +18,8 @@
 - 角色: 总导演/决策者，把控方向
 
 ## 预测下一步
-- likely_next_task: 数值表已稳定 → 交付任务卡给 CodeBuddy / 开始下一个系统设计
-- 相关文件: docs/design-discussion-03-economy.md
+- likely_next_task: 用户 review 黄金矿工+对话设计 → 确认/调参 → 整理任务卡给 CodeBuddy
+- 相关文件: docs/design-discussion-04-mining-and-dialogue.md
 
 ## 恢复指令（新会话必执行）
 1. 读本文件 → 获取项目状态和避雷清单
@@ -42,7 +42,8 @@
 - **游戏内容是 fillRect 像素拼接，PixelForge 只管 UI**——被纠正过一次
 - **设计新系统前先读现有设计文档和原代码**——被骂过一次（经济系统事件）
 - **满杯百香果是"锁定全部鬼为同一种"，不是加权随机**——被纠正过一次
-- **buff加成必须给整数**（+1pp, +3pp, 不要+1.5pp）——被纠正过一次
+- **buff加成概率百分点可以是小数**（+1.5pp没问题）——用户明确确认"概率的话没关系"
+- **笑话系统已死**——被骂过，永远不要再提任何"笑话内容/展示/系统"
 
 ## 工作流模板（收到任务后立即创建） 🔴
 

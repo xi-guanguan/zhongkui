@@ -509,7 +509,7 @@ function render(ctx, t) {
 | 抓到鬼飘字 | 18 | GHOST_GREEN | 黑 3px | + `shadowBlur` 绿光 |
 | BIG WIN | 24 | COPPER_SHINE | 黑 4px | + `shadowColor: gold` |
 | 鬼名字 | 13 | 对应鬼主色 | 黑 2px | `strokeText` → `fillText` |
-| 笑话文本 | 13 | BONE | 黑 2px | 同上 |
+| 孟婆台词 | 13 | BONE | 黑 2px | 同上 |
 | 按钮文字 | 15 | BONE | 无 | 纯 `fillText` |
 
 ---
@@ -586,6 +586,80 @@ function render(ctx, t) {
 
 ---
 
+## 14.5 堆叠精灵图 (Sprite Stacking) — 伪3D技法
+
+> 来源: 像素游戏社区成熟技法，适用于本项目的角色/道具渲染增强。
+
+### 原理
+
+将一个物体按垂直切片（水平图层），从下往上逐层绘制，每层偏移1px，产生"体素感"伪3D效果：
+
+```
+   ┌──────┐  ← 顶层 (头顶)
+   │      │
+   ├──────┤  ← 中层 (躯干)     每层 Y 偏移 1px
+   │      │
+   ├──────┤  ← 底层 (脚)
+```
+
+### Canvas 2D 实现
+
+```javascript
+// 核心渲染 — 从下往上绘制各层
+function drawStackedSprite(ctx, layers, x, y) {
+  for (var i = 0; i < layers.length; i++) {
+    ctx.drawImage(layers[i], x, y - i);  // 每层上移1px
+  }
+}
+```
+
+### 在本项目中的应用场景
+
+| 对象 | 应用方式 | 视觉收益 |
+|------|---------|---------|
+| 铜钱 | 3~5层圆形切片 → 厚重感 | 不再是扁平圆片，有"一摞铜钱"质感 |
+| 钟馗帽子/道具 | 5~8层 → 立体帽冠 | 角色更有体积感 |
+| 奶茶杯 | 4~6层 → 杯身厚度 | 商品图更吸引人 |
+| 鬼魂 | 2~3层半透明 → 飘渺感 | 配合 globalAlpha 渐变 |
+
+### 性能注意
+
+- 每个堆叠对象 = N 次 drawImage（N=层数）
+- **优化**: 预渲染到 OffscreenCanvas 缓存合成结果
+- 适用于**静态或低频动画**对象（铜钱旋转、道具展示）
+- 不建议用于大量高频运动对象
+
+### 制作工具
+
+| 工具 | 用途 | 平台 |
+|------|------|------|
+| MagicaVoxel | 体素建模 → 导出切片 | 免费 |
+| Aseprite | 逐层像素绘制 | 付费 |
+| 手动 Canvas 程序化 | 用代码生成各层（圆/矩形变体） | 零依赖 |
+
+### 与程序化生成结合
+
+```javascript
+// 程序化生成铜钱堆叠层
+function generateCoinStack(thickness) {
+  var layers = [];
+  for (var i = 0; i < thickness; i++) {
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    // 底部/顶部层画方孔全貌，中间层只画边缘环
+    if (i === 0 || i === thickness - 1) {
+      drawFullCoin(ctx);     // 完整铜钱面
+    } else {
+      drawCoinEdge(ctx);     // 只有边缘厚度
+    }
+    layers.push(canvas);
+  }
+  return layers;
+}
+```
+
+---
+
 ## 15. Canvas 2D vs NanoVG 优势对比
 
 | 能力 | Canvas 2D | NanoVG | 本项目收益 |
@@ -612,15 +686,14 @@ function render(ctx, t) {
   - 实现：AI 生一个基础杯型 → 程序化调色/调纹理生成全系列变体
 - **UI 风格**：PixelForge 像素复古风（详见 `docs/ui-style-pixelforge.md`）
 
-### ✅ Q3: 黄金矿工视觉 — 已确认
+### ✅ Q3: 黄金矿工视觉 — 已确认（v2 简化版）
 - **场景**：钟馗在船上，对着下面的冥河钩东西
 - **风格**：与主游戏一致（暗色冥界、像素复古）
-- **钩取物品设计**（AI 自由发挥）：
-  - 铜钱串（基础收益）
-  - 漂浮的冥界杂物（灯笼碎片、纸钱团、破木板）
-  - 沉底的宝物（金元宝、玉佩、古铜镜）
-  - 危险物/障碍（水鬼手、旋涡、毒蘑菇）
-  - 稀有物（封印符、鬼王碎片 → 触发特殊奖励）
+- **钩取物品**：**只有铜钱**（极简设计）
+  - 大铜钱（高价值）、小铜钱（低价值）
+  - 程序化生成：缩放 + 旋转 + 随机位置
+  - 可选用堆叠精灵图（§14.5）增加厚度感
+  - **无其他道具/障碍/稀有物**，就是简单重复赚钱
 
 ### ✅ Q4: 低画质开关 — 删除
 用户未设计此功能，从待讨论中移除。不做低画质开关。
