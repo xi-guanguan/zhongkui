@@ -323,10 +323,10 @@ var ZhongKui = (function() {
   // Bug#3: 道具描述模糊化
   function getEffectDesc(tea) {
     if (tea.type === 'red') {
-      if (tea.catchBonus <= 0.02) return '略微提升捕获';
-      if (tea.catchBonus <= 0.035) return '小幅提升捕获';
-      if (tea.catchBonus <= 0.05) return '显著提升捕获';
-      return '大幅提升捕获';
+      if (tea.catchBonus <= 0.02) return '略微提升捕获率';
+      if (tea.catchBonus <= 0.035) return '小幅提升捕获率';
+      if (tea.catchBonus <= 0.05) return '显著提升捕获率';
+      return '大幅提升捕获率';
     }
     if (tea.type === 'green') {
       if (tea.oddsBonus <= 3) return '略微提升赔率';

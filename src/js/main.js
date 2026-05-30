@@ -617,15 +617,15 @@
     if (inserted > 0) {
       ctx.font = FS.M + 'px monospace';
       ctx.fillStyle = CO.COPPER;
-      ctx.fillText('已投 ' + inserted + ' 币', W/2, LY.ZHONGKUI_Y - 40);
+      ctx.fillText('已投 ' + inserted + ' 币', W/2, LY.ZHONGKUI_Y - 80);
       ctx.font = FS.S + 'px monospace';
       ctx.fillStyle = CO.BONE;
-      ctx.fillText('按「开始」丢索套鬼', W/2, LY.ZHONGKUI_Y - 20);
+      ctx.fillText('按「开始」丢索套鬼', W/2, LY.ZHONGKUI_Y - 60);
     } else {
       ctx.font = FS.S + 'px monospace';
       ctx.globalAlpha = 0.5 + M.sin(t * 2) * 0.3;
       ctx.fillStyle = CO.BONE;
-      ctx.fillText('按「开始」投币开始游戏', W/2, LY.ZHONGKUI_Y - 20);
+      ctx.fillText('按「开始」投币开始游戏', W/2, LY.ZHONGKUI_Y - 60);
       ctx.globalAlpha = 1;
     }
   }
@@ -1142,14 +1142,14 @@
     var lineTimer = State.get('mengpoLineTimer');
     if (line && lineTimer > 0) {
       // 根据是否有图片调整气泡位置
-      var bubbleW = 260, bubbleH = 26;
+      var bubbleW = 260, bubbleH = 40;
       var bubbleX, bubbleY;
       if (_mengpoImg && _mengpoImg.complete) {
         // 图片模式: 气泡在人物右上方, 上移避免挡脸
-        bubbleX = 150; bubbleY = 48;
+        bubbleX = 150; bubbleY = 40;
       } else {
         // 手绘模式
-        bubbleX = W/2 + 24; bubbleY = 53;
+        bubbleX = W/2 + 24; bubbleY = 45;
       }
       if (bubbleX + bubbleW > W - 4) bubbleX = W - bubbleW - 4;
       ctx.fillStyle = 'rgba(13,13,26,0.95)';
@@ -1165,8 +1165,14 @@
       ctx.font = FS.S+'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = selected ? CO.COPPER_SHINE : CO.BONE;
-      var displayLine = line.length > 18 ? line.substring(0, 16)+'..' : line;
-      ctx.fillText(displayLine, bubbleX + bubbleW/2, bubbleY+16);
+      // 自动换行: 每行最多24个字符(260px/10px≈26)
+      var maxChars = 24;
+      if (line.length <= maxChars) {
+        ctx.fillText(line, bubbleX + bubbleW/2, bubbleY+16);
+      } else {
+        ctx.fillText(line.substring(0, maxChars), bubbleX + bubbleW/2, bubbleY+14);
+        ctx.fillText(line.substring(maxChars), bubbleX + bubbleW/2, bubbleY+28);
+      }
     }
 
     // ── 5. 柜台分界线(蓝线位置=240，有厚度) ──
