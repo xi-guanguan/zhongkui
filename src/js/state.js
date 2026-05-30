@@ -80,9 +80,17 @@ var State = (function() {
   }
 
   // ── 获取当前鬼类型 ──
+  // 优先使用鬼队列目标鬼，否则按轮番索引
   function currentGhost() {
-    var idx = _data.lockedGhostIdx >= 0 ? _data.lockedGhostIdx : _data.currentGhostIdx;
-    return CONFIG.GT[idx];
+    // 百香果锁定
+    if (_data.lockedGhostIdx >= 0) return CONFIG.GT[_data.lockedGhostIdx];
+    // 从鬼队列获取目标鬼类型
+    if (typeof Ghosts !== 'undefined' && Ghosts.getTargetType) {
+      var queueType = Ghosts.getTargetType();
+      if (queueType) return queueType;
+    }
+    // 兜底: 轮番索引
+    return CONFIG.GT[_data.currentGhostIdx];
   }
 
   // ── 推进鬼轮番 ──

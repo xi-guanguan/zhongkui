@@ -17,6 +17,7 @@
     Renderer.init(canvas);
     Audio.init();
     ZhongKui.init();
+    Ghosts.initRound();
     loadSave();
     State.changeStage('MENU');
     console.log('[钟馗] 初始化完成, 分辨率:', W, 'x', H);
@@ -57,10 +58,11 @@
 
     switch(stage) {
       case 'MENU':
+        Ghosts.update(dt);
         break;
 
       case 'ROUND':
-        // 等待投币输入(ZhongKui处理)
+        Ghosts.update(dt);
         break;
 
       case 'PAT':
@@ -165,8 +167,8 @@
     // ── 场景背景(色块占位) ──
     drawBackground(t);
 
-    // ── 鬼 ──
-    if (stage === 'ROUND' || stage === 'PAT' || stage === 'RESULT') {
+    // ── 鬼(菜单也显示作为背景氛围) ──
+    if (stage === 'MENU' || stage === 'ROUND' || stage === 'PAT' || stage === 'RESULT') {
       Ghosts.draw(ctx, t);
     }
 
