@@ -100,19 +100,14 @@
     }
   }
 
-  // ── 回合结算 ──
+  // ── 回合结算 (同套牛calc: catchP此时才判定) ──
   function resolveRound() {
     var chains = State.get('chains');
-    var ghost = State.currentGhost();
-    var totalWin = 0;
-    var anyCaught = false;
 
-    for (var i = 0; i < chains.length; i++) {
-      if (chains[i].caught) {
-        anyCaught = true;
-        totalWin += chains[i].odds;
-      }
-    }
+    // 结算: 判定每条链是否抓到鬼 (catchP是套住后的概率)
+    var result = Physics.resolveChains(chains);
+    var totalWin = result.totalWin;
+    var anyCaught = result.anyCaught;
 
     if (anyCaught) {
       State.set('coins', State.get('coins') + totalWin);
@@ -131,15 +126,12 @@
       console.log('[结算] 鬼跑了');
     }
 
-    // ROI更新
+    // ROI记录 (同套牛payoutHistory)
     var betAmount = State.get('betAmount');
-    State.updateROI(totalWin / betAmount);
+    State.updateROI({ spent: betAmount, won: totalWin });
 
     // buff回合--
     State.tickBuffs();
-
-    // 推进鬼轮番
-    State.advanceGhost();
 
     // 存档
     saveGame();

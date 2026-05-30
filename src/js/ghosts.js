@@ -1,6 +1,10 @@
-/* ghosts.js — 鬼怪系统：鬼队列(从右到左穿过屏幕) + AI行为
- * 类似套牛牛群循环：多只鬼在竞技场内从右向左移动，
- * 到达左边后从右边重新出现，形成连续流动的鬼群
+/* ghosts.js — 鬼怪系统：鬼队列(迁移套牛牛群循环机制)
+ * 核心逻辑:
+ *   1. 5种鬼固定循环出现(cycle打乱后无限重复)，不是按概率随机
+ *   2. 全部鬼匀速从右到左移动
+ *   3. 出左界后回收到队列末尾，类型按cycle分配
+ *   4. 链套向最接近画面中央的鬼
+ *   5. catchP是链套住后的被抓概率，不是出现概率
  * 依赖：CONFIG, State, Renderer
  * 暴露：Ghosts (全局) */
 
@@ -8,197 +12,142 @@ var Ghosts = (function() {
   var M = Math;
   var W = CONFIG.W;
   var LY = CONFIG.LY;
-  var CO_GLOW_BORDER = '#FFD700';
+  var CO = CONFIG.CO;
 
-  // ── 队列参数 ──
-  var QUEUE_SIZE = 5;           // 队列中同时可见的鬼数
-  var BASE_SPEED = 30;          // 基础移动速度 px/s
-  var SPACING = 70;             // 鬼之间水平间距
-  var ARENA_TOP = LY.ARENA_Y + 20;
-  var ARENA_BOT = LY.ARENA_Y + LY.ARENA_H - 20;
+  // ── 队列参数 (迁移套牛LY.COW) ──
+  var GHOST_Y = LY.ARENA_Y + LY.ARENA_H / 2;  // 鬼在竞技场中央水平线
+  var VISIBLE = 5;          // 同屏可见鬼数
+  var SPACING = M.floor(W / VISIBLE);  // 鬼间距 (同套牛64px)
+  var SPEED = 40;            // 匀速移动 px/s (同套牛)
+  var MAX_HW = 16;           // 鬼最大半宽
 
-  // ── 鬼队列 ──
-  var queue = [];   // [{type, x, y, speed, wobbleSeed, wobbleAmp}]
-  var targetGhost = null; // 当前目标鬼(链指向的)
+  // ── 鬼队列 (同套牛GS.cows) ──
+  var queue = [];            // [{type, x, y, speed, odds}]
+  var cycle = [];            // 类型循环序列 [0,1,2,3,4]打乱
+  var cycleIdx = 0;          // cycle分配指针
 
-  // ── 随机选鬼类型(按概率) ──
-  function rollGhostType() {
-    var r = Math.random();
-    var cum = 0;
-    var gt = CONFIG.GT;
-    for (var i = 0; i < gt.length; i++) {
-      cum += gt[i].catchP;
-      if (r < cum) return gt[i];
-    }
-    return gt[0]; // 保底牛头
+  // ── 打乱5种鬼的循环序列 (同套牛cowCycle) ──
+  function shuffleCycle() {
+    cycle = [0, 1, 2, 3, 4].sort(function() { return M.random() - 0.5; });
+    cycleIdx = 0;
   }
 
-  // ── 创建一只鬼 ──
-  function createGhost(x) {
-    var type = rollGhostType();
-    var speedVar = 0.6 + Math.random() * 0.8; // 速度波动0.6~1.4
-    var yCenter = (ARENA_TOP + ARENA_BOT) / 2;
-    var yRange = (ARENA_BOT - ARENA_TOP) * 0.3;
-    return {
-      type: type,
-      x: x,
-      y: yCenter + (Math.random() - 0.5) * yRange,
-      speed: BASE_SPEED * speedVar,
-      wobbleSeed: Math.random() * 100,
-      wobbleAmpY: 5 + Math.random() * 15,  // 垂直抖动幅度
-      wobbleAmpX: 2 + Math.random() * 5,   // 水平微调
-      wobbleFreqY: 1 + Math.random() * 2,
-      wobbleFreqX: 0.5 + Math.random() * 1.5,
-      timer: 0,
-      isTarget: false
-    };
+  // ── 从cycle取下一个类型索引 ──
+  function nextType() {
+    var ti = cycle[cycleIdx % 5];
+    cycleIdx++;
+    return ti;
   }
 
-  // ── 初始化本回合鬼队列 ──
+  // ── 初始化本回合鬼队列 (同套牛doStart) ──
   function initRound() {
+    shuffleCycle();
     queue = [];
-    // 均匀分布在竞技场内(含右侧屏幕外)
-    for (var i = 0; i < QUEUE_SIZE; i++) {
-      var x = W + i * SPACING;
-      queue.push(createGhost(x));
+    // 8只鬼: 5只在屏 + 3只右侧缓冲 (同套牛)
+    for (var i = 0; i < 8; i++) {
+      var ti = nextType();
+      var gt = CONFIG.GT[ti];
+      queue.push({
+        type: ti,
+        x: W + SPACING + i * SPACING,  // 从右边界外依次排列
+        y: GHOST_Y,
+        speed: SPEED,
+        odds: gt.oddsMin + M.floor(M.random() * (gt.oddsMax - gt.oddsMin + 1))
+      });
     }
-    // 标记目标鬼(最接近中央的那只)
-    pickTarget();
   }
 
-  // ── 选目标鬼: 最接近画面中央的 ──
-  function pickTarget() {
-    var bestDist = 99999;
-    targetGhost = queue[0];
-    for (var i = 0; i < queue.length; i++) {
-      queue[i].isTarget = false;
-      var dist = M.abs(queue[i].x - W / 2);
-      if (dist < bestDist) {
-        bestDist = dist;
-        targetGhost = queue[i];
-      }
-    }
-    if (targetGhost) targetGhost.isTarget = true;
-  }
-
-  // ── 更新鬼队列 ──
+  // ── 更新鬼队列 (同套牛update RUNNING) ──
   function update(dt) {
+    // 全部鬼匀速向左移动
     for (var i = 0; i < queue.length; i++) {
-      var g = queue[i];
-      g.timer += dt;
-
-      // 基础从右到左移动
-      g.x -= g.speed * dt;
-
-      // 垂直抖动(按性格调整幅度)
-      var wobbleMul = 1;
-      switch(g.type.personality) {
-        case 'timid':  wobbleMul = 0.5; break;
-        case 'normal': wobbleMul = 1.0; break;
-        case 'crazy':  wobbleMul = 2.0; break;
-        case 'cool':   wobbleMul = 0.3; break;
-        case 'rage':   wobbleMul = 1.5; break;
-      }
-      var wobbleY = Math.sin(g.timer * g.wobbleFreqY + g.wobbleSeed) * g.wobbleAmpY * wobbleMul;
-      var wobbleX = Math.sin(g.timer * g.wobbleFreqX + g.wobbleSeed * 2) * g.wobbleAmpX * wobbleMul;
-      g.x += wobbleX * dt * 10;
-      g.y += wobbleY * dt;
-
-      // 垂直钳制
-      g.y = M.max(ARENA_TOP + g.type.size[1] / 2, M.min(ARENA_BOT - g.type.size[1] / 2, g.y));
-
-      // 出左边后从右边重新进入(循环)
-      if (g.x < -40) {
-        // 找队列中最右边的鬼，在其右侧SPACING处重生
-        var maxX = 0;
-        for (var j = 0; j < queue.length; j++) {
-          if (queue[j].x > maxX) maxX = queue[j].x;
-        }
-        g.x = M.max(W + 20, maxX + SPACING);
-        // 重新随机类型和速度
-        g.type = rollGhostType();
-        g.speed = BASE_SPEED * (0.6 + Math.random() * 0.8);
-        g.wobbleSeed = Math.random() * 100;
-        g.y = (ARENA_TOP + ARENA_BOT) / 2 + (Math.random() - 0.5) * (ARENA_BOT - ARENA_TOP) * 0.3;
-        g.timer = 0;
-      }
+      queue[i].x -= queue[i].speed * dt;
     }
 
-    // 更新目标鬼
-    pickTarget();
-  }
-
-  // ── 渲染鬼队列 ──
-  function draw(ctx, t) {
+    // 连续队列: 鬼完全出左界后回收到队列末尾
+    // 回收时类型按cycle序列分配，保证1234512345...循环
     for (var i = 0; i < queue.length; i++) {
       var g = queue[i];
-      var ghost = g.type;
-      var w = ghost.size[0], h = ghost.size[1];
-
-      // 只画屏幕内的鬼
-      if (g.x < -50 || g.x > W + 50) continue;
-
-      ctx.save();
-
-      // 目标鬼: 呼吸光环 + 高亮轮廓
-      if (g.isTarget) {
-        ctx.shadowColor = ghost.glow;
-        ctx.shadowBlur = 6 + Math.sin(t * 3 + g.wobbleSeed) * 4;
-        // 高亮边框
-        ctx.strokeStyle = CO_GLOW_BORDER;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(g.x - w/2 - 2, g.y - h/2 - 2, w + 4, h + 4);
+      if (g.x < -MAX_HW * 2) {
+        // 找当前最右鬼的位置，紧接其后+间距 (同套牛)
+        var maxR = -999;
+        for (var j = 0; j < queue.length; j++) {
+          if (queue[j].x > maxR) maxR = queue[j].x;
+        }
+        g.x = maxR + SPACING;
+        // 类型按cycle序列循环 (同套牛)
+        g.type = nextType();
+        var gt = CONFIG.GT[g.type];
+        g.odds = gt.oddsMin + M.floor(M.random() * (gt.oddsMax - gt.oddsMin + 1));
       }
+    }
+  }
+
+  // ── 渲染鬼队列 (同套牛sRun绘制牛) ──
+  function draw(ctx, t) {
+    // x大的先画(远处)，x小的后画(近处覆盖)
+    var sorted = queue.slice().sort(function(a, b) { return b.x - a.x; });
+
+    for (var i = 0; i < sorted.length; i++) {
+      var g = sorted[i];
+      // 只绘制屏幕可见范围内的鬼
+      if (g.x < -MAX_HW * 2 || g.x > W + MAX_HW * 2) continue;
+
+      var ghost = CONFIG.GT[g.type];
+      var w = ghost.size[0], h = ghost.size[1];
+      var gx = M.floor(g.x), gy = M.floor(g.y);
 
       // 身体色块
       ctx.fillStyle = ghost.color;
-      ctx.fillRect(g.x - w/2, g.y - h/2, w, h);
-      ctx.shadowBlur = 0;
+      ctx.fillRect(gx - w / 2, gy - h / 2, w, h);
 
       // 眼睛
       ctx.fillStyle = '#FFF';
-      ctx.fillRect(M.floor(g.x - w * 0.2), M.floor(g.y - h * 0.15), 3, 3);
-      ctx.fillRect(M.floor(g.x + w * 0.1), M.floor(g.y - h * 0.15), 3, 3);
+      ctx.fillRect(gx - M.floor(w * 0.2), gy - M.floor(h * 0.15), 3, 3);
+      ctx.fillRect(gx + M.floor(w * 0.1), gy - M.floor(h * 0.15), 3, 3);
 
       // 名字
       ctx.font = CONFIG.FS.S + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = ghost.color;
-      ctx.fillText(ghost.name, M.floor(g.x), M.floor(g.y - h/2 - 6));
+      ctx.fillText(ghost.name, gx, gy - h / 2 - 6);
 
-      // 赔率范围
-      ctx.fillStyle = CONFIG.CO.COPPER;
-      ctx.fillText('x' + ghost.oddsMin + '~' + ghost.oddsMax, M.floor(g.x), M.floor(g.y + h/2 + 14));
-
-      // 目标鬼标记: 闪烁的"★"
-      if (g.isTarget) {
-        ctx.fillStyle = CONFIG.CO.COPPER_SHINE;
-        ctx.globalAlpha = 0.5 + Math.sin(t * 4) * 0.5;
-        ctx.fillText('★', M.floor(g.x), M.floor(g.y - h/2 - 18));
-        ctx.globalAlpha = 1;
-      }
-
-      ctx.restore();
+      // 赔率
+      ctx.fillStyle = CO.COPPER;
+      ctx.fillText('x' + g.odds, gx, gy + h / 2 + 14);
     }
   }
 
-  // ── 获取目标鬼位置(链指向) ──
-  function getPos() {
-    if (targetGhost) return {x: targetGhost.x, y: targetGhost.y};
-    return {x: W/2, y: (ARENA_TOP + ARENA_BOT) / 2};
+  // ── 获取链目标鬼 (同套牛doLasso: 按距离中央排序) ──
+  function getTargets(count) {
+    // 屏幕内所有可见鬼，按距中央排序
+    var visible = [];
+    for (var i = 0; i < queue.length; i++) {
+      if (queue[i].x > -10 && queue[i].x < W + 10) {
+        visible.push(queue[i]);
+      }
+    }
+    visible.sort(function(a, b) { return M.abs(a.x - W / 2) - M.abs(b.x - W / 2); });
+
+    // 取前count个
+    var targets = visible.slice(0, M.min(count, visible.length));
+    return targets;
   }
 
-  // ── 获取目标鬼类型 ──
-  function getTargetType() {
-    if (targetGhost) return targetGhost.type;
-    return CONFIG.GT[0];
+  // ── 获取目标鬼位置 (链指向最近中央的鬼) ──
+  function getPos() {
+    var targets = getTargets(1);
+    if (targets.length > 0) {
+      return { x: targets[0].x, y: targets[0].y };
+    }
+    return { x: W / 2, y: GHOST_Y };
   }
 
   return {
     initRound: initRound,
     update: update,
     draw: draw,
-    getPos: getPos,
-    getTargetType: getTargetType
+    getTargets: getTargets,
+    getPos: getPos
   };
 })();

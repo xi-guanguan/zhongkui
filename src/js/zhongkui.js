@@ -1,4 +1,5 @@
 /* zhongkui.js — 钟馗控制：输入、动画、技能
+ * 链机制迁移套牛: 多条链分别指向不同目标鬼
  * 依赖：CONFIG, State, Renderer, Audio
  * 暴露：ZhongKui (全局) */
 
@@ -12,10 +13,9 @@ var ZhongKui = (function() {
   var y = LY.ZHONGKUI_Y;
 
   // ── 输入状态 ──
-  var tapTarget = null; // {x,y} 点击位置
+  var tapTarget = null;
 
   function init() {
-    // 绑定触摸/点击
     var touchLayer = document.getElementById('touch-layer');
     if (touchLayer) {
       touchLayer.addEventListener('touchstart', onTouch, {passive:false});
@@ -44,7 +44,6 @@ var ZhongKui = (function() {
 
     switch(stage) {
       case 'MENU':
-        // 点击开始
         State.changeStage('ROUND');
         Audio.play('btn');
         break;
@@ -58,7 +57,6 @@ var ZhongKui = (function() {
         Renderer.triggerShake(4);
         break;
       case 'RESULT':
-        // 点击继续
         State.changeStage('SHOP');
         Audio.play('btn');
         break;
@@ -66,7 +64,6 @@ var ZhongKui = (function() {
         handleShopTap(tx, ty);
         break;
       case 'MINING':
-        // 打工点击由mining模块处理
         if (typeof Mining !== 'undefined') Mining.onTap(tx, ty);
         break;
       case 'SHOP_BACK':
@@ -79,15 +76,12 @@ var ZhongKui = (function() {
   // ── 投币选择+确认 ──
   function handleRoundTap(tx, ty) {
     var bottomY = LY.BOTTOM_Y;
-    // 投币选择区域
     if (ty > bottomY && ty < bottomY + 50) {
-      // 检测投币按钮 1~5
       for (var i = 1; i <= 5; i++) {
         var bx = 65 + (i-1)*48;
         if (tx > bx && tx < bx + 42) {
           var bet = State.get('betAmount');
           if (i === bet) {
-            // 再次点击已选=确认投币
             startRound();
           } else {
             State.set('betAmount', i);
@@ -96,7 +90,6 @@ var ZhongKui = (function() {
           return;
         }
       }
-      // 确认按钮
       if (tx > W/2 - 50 && tx < W/2 + 50 && ty > bottomY + 40) {
         startRound();
       }
@@ -107,14 +100,37 @@ var ZhongKui = (function() {
     var bet = State.get('betAmount');
     var coins = State.get('coins');
     if (coins < bet) {
-      // 钱不够，去打工
       State.changeStage('SHOP');
       return;
     }
     State.set('coins', coins - bet);
-    var chains = Physics.rollChains(bet);
+
+    // 获取链目标鬼 (同套牛doLasso: 按距中央排序取前bet个)
+    var targets = Ghosts.getTargets(bet);
+
+    // 构建链 (同套牛doLasso构建ropes)
+    var chains = [];
+    for (var i = 0; i < targets.length; i++) {
+      var g = targets[i];
+      var ghostType = CONFIG.GT[g.type];
+      chains.push({
+        targetGhost: g,         // 引用鬼队列中的鬼对象
+        targetX: g.x,
+        targetY: g.y,
+        odds: g.odds,
+        ghostType: g.type,
+        caught: false,           // PAT阶段未知，RESULT阶段才骰
+        isSuper: false
+      });
+    }
+    // 杨枝甘露: 第1条链x10概率
+    var buffs = State.get('buffs');
+    if (buffs.special_super && chains.length > 0) {
+      chains[0].isSuper = true;
+    }
+
     State.set('chains', chains);
-    Ghosts.initRound();
+    Ghosts.initRound();  // 重新生成鬼队列
     State.changeStage('PAT');
     State.set('hitCount', 0);
     State.set('hitTimer', 0);
@@ -124,20 +140,17 @@ var ZhongKui = (function() {
   // ── 商店点击 ──
   function handleShopTap(tx, ty) {
     var bottomY = LY.BOTTOM_Y;
-    // 打工按钮
     if (tx < W/2 && ty > bottomY) {
       State.changeStage('MINING');
       if (typeof Mining !== 'undefined') Mining.start();
       Audio.play('btn');
       return;
     }
-    // 返回抓鬼按钮
     if (tx >= W/2 && ty > bottomY) {
       State.changeStage('ROUND');
       Audio.play('btn');
       return;
     }
-    // 奶茶列表点击
     handleMilkTeaTap(tx, ty);
   }
 
@@ -157,7 +170,6 @@ var ZhongKui = (function() {
         return;
       }
     }
-    // 请孟婆喝一杯
     var treatY = startY + 5 * rowH + 5;
     if (ty > treatY && ty < treatY + 36 && tx > W/2 - 150 && tx < W/2 + 150) {
       buyMengpoTreat();
@@ -167,11 +179,10 @@ var ZhongKui = (function() {
   function buyTea(tea) {
     var coins = State.get('coins');
     if (coins < tea.price) {
-      Renderer.spawnFloatingText(W/2, 400, '铜钱不足!', '#FF4444');
+      Renderer.spawnFloatingText(W/2, 300, '铜钱不足!', '#FF4444');
       return;
     }
     State.set('coins', coins - tea.price);
-    // 应用buff
     var buffs = State.get('buffs');
     switch(tea.type) {
       case 'red':
@@ -181,7 +192,6 @@ var ZhongKui = (function() {
         buffs.green = { value: tea.oddsBonus, remaining: tea.duration };
         break;
       case 'special_catch':
-        // 随机锁定一种鬼
         var lockedIdx = Math.floor(Math.random() * CONFIG.GT.length);
         buffs.special_catch = { lockedIdx: lockedIdx, remaining: tea.duration };
         State.set('lockedGhostIdx', lockedIdx);
@@ -193,7 +203,6 @@ var ZhongKui = (function() {
     }
     Audio.play('coin');
     Renderer.spawnFloatingText(W/2, 240, '+' + tea.name, CO.GHOST_GREEN);
-    // 触发孟婆对话
     if (typeof MengPo !== 'undefined') {
       State.set('mengpoLine', MengPo.getLine('buy'));
       State.set('mengpoLineTimer', 2.5);
@@ -207,10 +216,8 @@ var ZhongKui = (function() {
       return;
     }
     State.set('coins', coins - CONFIG.MENGPO_TREAT_PRICE);
-    // 随机获得#1~#8的buff
     var randIdx = Math.floor(Math.random() * 8);
     buyTea(CONFIG.MILK_TEA[randIdx]);
-    // +好感经验
     var favor = State.get('favor');
     favor.exp++;
     var leveled = State.checkFavorLevelUp();
@@ -226,27 +233,23 @@ var ZhongKui = (function() {
   // ── 渲染钟馗(色块占位) ──
   function draw(ctx, t) {
     var stage = State.get('stage');
-    if (stage === 'MINING') return; // 打工场景不画钟馗
+    if (stage === 'MINING') return;
 
     // 呼吸金光
     ctx.shadowColor = CO.COPPER_SHINE;
     ctx.shadowBlur = 3 + Math.sin(t*1.8)*2;
-    // 身体(红袍)
     ctx.fillStyle = CO.BLOOD;
     ctx.fillRect(x - 6, y, 12, 16);
-    // 头
     ctx.fillStyle = CO.BONE;
     ctx.fillRect(x - 5, y - 8, 10, 10);
-    // 帽子
     ctx.fillStyle = CO.VOID;
     ctx.fillRect(x - 7, y - 14, 14, 6);
     ctx.shadowBlur = 0;
-    // 腿
     ctx.fillStyle = CO.VOID;
     ctx.fillRect(x - 5, y + 16, 4, 8);
     ctx.fillRect(x + 1, y + 16, 4, 8);
 
-    // 如果在PAT阶段，画链
+    // PAT/RESULT阶段画链 (同套牛sLasso/sHit绘制ropes)
     if (stage === 'PAT' || stage === 'RESULT') {
       drawChains(ctx, t);
     }
@@ -254,25 +257,39 @@ var ZhongKui = (function() {
 
   function drawChains(ctx, t) {
     var chains = State.get('chains');
-    var ghostPos = Ghosts.getPos();
-    var buffs = State.get('buffs');
+    if (!chains) return;
+    var stage = State.get('stage');
 
     for (var i = 0; i < chains.length; i++) {
       var chain = chains[i];
+      var targetGhost = chain.targetGhost;
+
+      // 鬼还在队列中移动，用当前位置
+      var tx, ty2;
+      if (targetGhost) {
+        tx = targetGhost.x;
+        ty2 = targetGhost.y;
+      } else {
+        tx = chain.targetX;
+        ty2 = chain.targetY;
+      }
+
       var chainColor = chain.isSuper ? CO.COPPER_SHINE : CO.CHAIN;
-      // 从钟馗到鬼画线
       ctx.strokeStyle = chainColor;
       ctx.lineWidth = chain.isSuper ? 3 : 1.5;
-      if (chain.caught && State.get('stage') === 'RESULT') {
+
+      // RESULT阶段: 抓到的链发光
+      if (stage === 'RESULT' && chain.caught) {
         ctx.shadowColor = CO.CHAIN_GLOW;
         ctx.shadowBlur = 6;
       }
+
+      // 从钟馗到鬼画线 (同套牛rope: 二次贝塞尔)
       ctx.beginPath();
       ctx.moveTo(x, y);
-      // 带垂坠弧
-      var midX = (x + ghostPos.x) / 2;
-      var midY = (y + ghostPos.y) / 2 + 20;
-      ctx.quadraticCurveTo(midX, midY, ghostPos.x, ghostPos.y);
+      var midX = (x + tx) / 2;
+      var midY = (y + ty2) / 2 + 20;
+      ctx.quadraticCurveTo(midX, midY, tx, ty2);
       ctx.stroke();
       ctx.shadowBlur = 0;
     }

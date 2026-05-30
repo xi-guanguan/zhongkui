@@ -79,21 +79,20 @@ var State = (function() {
     if (fns) { for (var i = 0; i < fns.length; i++) fns[i](newStage); }
   }
 
-  // ── 获取当前鬼类型 ──
-  // 优先使用鬼队列目标鬼，否则按轮番索引
+  // ── 获取当前鬼类型(用于HUD显示) ──
   function currentGhost() {
     // 百香果锁定
     if (_data.lockedGhostIdx >= 0) return CONFIG.GT[_data.lockedGhostIdx];
-    // 从鬼队列获取目标鬼类型
-    if (typeof Ghosts !== 'undefined' && Ghosts.getTargetType) {
-      var queueType = Ghosts.getTargetType();
-      if (queueType) return queueType;
+    // 从鬼队列获取(最接近中央的鬼)
+    if (typeof Ghosts !== 'undefined' && Ghosts.getTargets) {
+      var targets = Ghosts.getTargets(1);
+      if (targets.length > 0) return CONFIG.GT[targets[0].type];
     }
-    // 兜底: 轮番索引
-    return CONFIG.GT[_data.currentGhostIdx];
+    // 兜底
+    return CONFIG.GT[0];
   }
 
-  // ── 推进鬼轮番 ──
+  // ── 推进鬼锁定回合 ──
   function advanceGhost() {
     if (_data.lockedRounds > 0) {
       _data.lockedRounds--;
@@ -101,21 +100,28 @@ var State = (function() {
         _data.lockedGhostIdx = -1;
         _data.buffs.special_catch = null;
       }
+    }
+    // 鬼队列自己管理循环，不再轮番推进
+  }
+      }
     } else {
       _data.currentGhostIdx = (_data.currentGhostIdx + 1) % CONFIG.GT.length;
     }
   }
 
-  // ── ROI计算 ──
-  function updateROI(gain) {
-    _data.roiHistory.push(gain);
+  // ── ROI计算 (同套牛payoutHistory: 存{spent,won}) ──
+  function updateROI(record) {
+    _data.roiHistory.push(record);
     if (_data.roiHistory.length > CONFIG.ROI.windowSize) {
       _data.roiHistory.shift();
     }
     if (_data.roiHistory.length === 0) { _data.recentROI = 0.5; return; }
-    var sum = 0;
-    for (var i = 0; i < _data.roiHistory.length; i++) sum += _data.roiHistory[i];
-    _data.recentROI = sum / _data.roiHistory.length;
+    var spent = 0, won = 0;
+    for (var i = 0; i < _data.roiHistory.length; i++) {
+      spent += _data.roiHistory[i].spent;
+      won += _data.roiHistory[i].won;
+    }
+    _data.recentROI = spent > 0 ? won / spent : 0.5;
   }
 
   // ── buff 获取当前加成 ──
