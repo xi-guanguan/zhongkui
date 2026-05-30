@@ -560,10 +560,12 @@ var ZhongKui = (function() {
     var btnW = 200, btnH = 36, gap = 10;
     var sfxY = centerY;
     var musicY = sfxY + gap + btnH;
-    var resetY = musicY + gap + btnH;
+    var trackY = musicY + gap + btnH;
+    var resetY = trackY + gap + btnH;
     return {
       sfx:   { x: W/2-btnW/2, y: sfxY,   w: btnW, h: btnH },
       music: { x: W/2-btnW/2, y: musicY, w: btnW, h: btnH },
+      track: { x: W/2-btnW/2, y: trackY, w: btnW, h: btnH },
       reset: { x: W/2-btnW/2, y: resetY, w: btnW, h: btnH },
       lastBtnBottom: resetY + btnH,
       topBound: centerY - 40
@@ -581,6 +583,10 @@ var ZhongKui = (function() {
     // 音乐开关
     if (tx > b.music.x && tx < b.music.x+b.music.w && ty > b.music.y && ty < b.music.y+b.music.h) {
       Audio.toggleBgmMute();
+    }
+    // 切换曲目
+    if (tx > b.track.x && tx < b.track.x+b.track.w && ty > b.track.y && ty < b.track.y+b.track.h) {
+      Audio.cycleBGM();
     }
     // 重置存档
     if (tx > b.reset.x && tx < b.reset.x+b.reset.w && ty > b.reset.y && ty < b.reset.y+b.reset.h) {
@@ -629,6 +635,16 @@ var ZhongKui = (function() {
     ctx.font = FS.M+'px monospace'; ctx.textAlign = 'center';
     ctx.fillStyle = CO.BONE;
     ctx.fillText('音乐: ' + (Audio.isBgmMuted() ? '关' : '开'), W/2, b.music.y+23);
+
+    // 切换曲目
+    ctx.fillStyle = CO.PANEL;
+    ctx.fillRect(b.track.x, b.track.y, b.track.w, b.track.h);
+    ctx.strokeStyle = CO.COPPER; ctx.lineWidth = 2;
+    ctx.strokeRect(b.track.x+1, b.track.y+1, b.track.w-2, b.track.h-2);
+    ctx.font = FS.M+'px monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = CO.BONE;
+    var trackNames = {idle:'地府夜行', shop:'奈何桥铺', mining:'阴河撑船'};
+    ctx.fillText('曲目: ' + (trackNames[Audio.getCurrentBGM()] || '地府夜行'), W/2, b.track.y+23);
 
     // 重置存档
     ctx.fillStyle = 'rgba(139,0,0,0.4)';

@@ -12,6 +12,7 @@
   var canvas, ctx;
   var lastTime = 0, totalTime = 0;
   var _mengpoImg = null;
+  var _currentBGM = null;
 
   function _loadMengpoImg() {
     var img = new Image();
@@ -30,6 +31,8 @@
     _loadMengpoImg();
     ZhongKui.init();
     State.changeStage('IDLE');
+    // 启动BGM(需用户交互后才可播放，这里先准备)
+    setTimeout(function() { Audio.playBGM('idle', 2.0); }, 100);
     console.log('[钟馗 v0.8] 初始化完成', W, 'x', H, '铜钱:', State.get('coins'));
     console.log('v0.8更新: 钟馗重绘V2/5鬼重绘V2/链节纹理+辉光/BigWin全屏冲击/结算飞币/Combo标签');
   }
@@ -254,10 +257,22 @@
 
   // ════════════════ 渲染 ════════════════
 
+  function _updateBGM() {
+    var stage = State.get('stage');
+    var shopOpen = State.get('shopOpen');
+    var target = shopOpen ? 'shop' : (stage === 'MINING' ? 'mining' : 'idle');
+    if (target !== _currentBGM) {
+      _currentBGM = target;
+      Audio.switchBGM(target);
+    }
+  }
+
   function render(dt) {
     var stage = State.get('stage');
     var t = totalTime;
     var se = State.get('stageTimer');
+
+    _updateBGM();
 
     ctx.save();
     Renderer.applyShake();
@@ -512,8 +527,8 @@
   function drawInventory(t) {
     var coins = State.get('coins');
     var buffs = State.get('buffs');
-    // 行囊固定在底部栏上方
-    var bagX = 20, bagY = 400 - 48, bagW = W - 40, bagH = 40;
+    // 行囊固定在底部栏上方（黄色区域）
+    var bagX = 20, bagY = 388, bagW = W - 40, bagH = 36;
     // 面板底
     ctx.fillStyle = CO.PANEL;
     ctx.fillRect(bagX, bagY, bagW, bagH);
@@ -1127,11 +1142,11 @@
     var lineTimer = State.get('mengpoLineTimer');
     if (line && lineTimer > 0) {
       // 根据是否有图片调整气泡位置
-      var bubbleW = 200, bubbleH = 24;
+      var bubbleW = 260, bubbleH = 26;
       var bubbleX, bubbleY;
       if (_mengpoImg && _mengpoImg.complete) {
         // 图片模式: 气泡在人物右上方, 上移避免挡脸
-        bubbleX = 180; bubbleY = 55;
+        bubbleX = 150; bubbleY = 48;
       } else {
         // 手绘模式
         bubbleX = W/2 + 24; bubbleY = 53;
