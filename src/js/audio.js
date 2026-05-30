@@ -1,10 +1,12 @@
 /* audio.js — Web Audio 音效：程序化合成
+ * 新增: 音乐/音效分别控制
  * 依赖：无
  * 暴露：Audio (全局) */
 
 var Audio = (function() {
   var _ac = null;
-  var _muted = false;
+  var _sfxMuted = false;
+  var _bgmMuted = false;
 
   function init() {
     try { _ac = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -12,7 +14,7 @@ var Audio = (function() {
   }
 
   function play(name) {
-    if (!_ac || _muted) return;
+    if (!_ac || _sfxMuted) return;
     if (_ac.state === 'suspended') _ac.resume();
     var osc = _ac.createOscillator();
     var gain = _ac.createGain();
@@ -66,8 +68,17 @@ var Audio = (function() {
     }
   }
 
-  function toggleMute() { _muted = !_muted; return _muted; }
-  function isMuted() { return _muted; }
+  function toggleSfxMute() { _sfxMuted = !_sfxMuted; return _sfxMuted; }
+  function toggleBgmMute() { _bgmMuted = !_bgmMuted; return _bgmMuted; }
+  function isSfxMuted() { return _sfxMuted; }
+  function isBgmMuted() { return _bgmMuted; }
+  function setSfxMuted(v) { _sfxMuted = v; }
+  function setBgmMuted(v) { _bgmMuted = v; }
 
-  return { init:init, play:play, toggleMute:toggleMute, isMuted:isMuted };
+  return {
+    init:init, play:play,
+    toggleSfxMute:toggleSfxMute, toggleBgmMute:toggleBgmMute,
+    isSfxMuted:isSfxMuted, isBgmMuted:isBgmMuted,
+    setSfxMuted:setSfxMuted, setBgmMuted:setBgmMuted
+  };
 })();

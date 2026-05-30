@@ -51,3 +51,53 @@
 - 全stage串联: MENU→ROUND→PAT→RESULT→SHOP→MINING→SHOP
 - 色块占位渲染: fillRect色块代替所有视觉元素
 - console.log验证: 投币→判定→buff生效→回合减少→打工→好感升级
+
+## [2026-05-30 17:55] Bug1~4 ✅ 设置界面修复
+
+- Bug1: _settingsBtnBounds()统一按钮位置, 消除硬编码偏移
+- Bug2: 重置存档后settingsOpen=false关闭面板
+- Bug3: updateDOM()开头判断settingsOpen禁用btnAction/btnShop
+- Bug4: FAVOR_LEVELS经验从[0,3,8,15,25]改为[0,1,3,6,10]
+
+## [2026-05-30 17:55] T2.1 ✅ 像素角色渲染
+
+- 钟馗: 官帽/脸/胡须/红袍/腰带/腿 fillRect拼接 + 呼吸微动(sin*1.5)
+- 5鬼: 牛头(抖动)/马面(漂浮)/黑无常(鬼火绿眼)/白无常(闪现)/刑天(冲撞)
+- shadowBlur光环: 4+sin(t*2)*3, 各鬼独立glow色
+- 链环: 待机投币数/回合链数显示
+
+## [2026-05-30 17:55] T2.2 ✅ 堆叠精灵图
+
+- drawStackedSprite(ctx, layers, x, y, scale)通用函数
+- prerenderStacked(layers, scale, w, h) OffscreenCanvas缓存
+- prerenderCoinStack(size): 3层铜钱(顶/底方孔+中间边缘环)
+- drawCoin(x,y,size,rotation): 预渲染+旋转
+
+## [2026-05-30 17:55] T2.3 ✅ 场景渲染
+
+- 冥界天空: 线性渐变 VOID→DUSK→FOG
+- 鬼火星点: lighter叠光 + 确定性随机预计算 + 正弦闪烁
+- 黄泉山脉: Path2D缓存 + shadowBlur脊线微光
+- 竞技场: 径向渐变暗角(中亮边暗)
+- 迷雾过渡区 + 底部暗区
+
+## [2026-05-30 17:55] T2.4 ✅ HUD PixelForge风格
+
+- 顶栏背景: #0F0F23 + 2px内描边 #3A3A6A
+- 铜钱图标: 小方块+方孔
+- 文字: 先strokeText(黑2px)后fillText
+- Buff图标: 背景+稀有度色边框+文字标签(捕/赔/锁/超)
+
+## [2026-05-30 17:55] T2.5 ✅ GameJuice
+
+- 屏幕闪白: triggerFlash(color, duration) BIG WIN闪金/普通闪白
+- 鬼消散粒子: spawnDissolveParticles(x,y,color,count)
+- 铜钱飞入: spawnCoinFly(fromX,fromY,toX,toY) 飞向HUD
+- 连击/成功: triggerShake(intensity) 已有
+
+## [2026-05-30 17:55] T2.6 ✅ 色板统一
+
+- CO新增: PANEL/PANEL_BORDER/TEAL/SUCCESS/DANGER (PixelForge融合)
+- 替换硬编码: #1B1B3A→CO.PANEL, #3A3A6A→CO.PANEL_BORDER
+- 5鬼专色保持不变(牛头=#8B4513 马面=#4B0082 等)
+- 12色基础+4色UI扩展=16色(文档允许PixelForge融合)

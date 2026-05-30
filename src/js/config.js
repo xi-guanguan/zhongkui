@@ -34,13 +34,16 @@ var CONFIG = (function() {
     GHOST_MAX_HW: 16
   };
 
-  // ── 色板（冥界12色）──
+  // ── T2.6 色板: 冥界12色 + PixelForge融合 ──
   var CO = {
     VOID:'#0D0D1A', DUSK:'#1C1033', FOG:'#2A1B3D',
     GHOST_GREEN:'#39FF14', COPPER:'#CD7F32', COPPER_SHINE:'#FFD700',
     BLOOD:'#8B0000', SOUL_BLUE:'#4169E1', BONE:'#F5F5DC',
     CHAIN:'#708090', CHAIN_GLOW:'#A0C4FF', LANTERN:'#FF6600',
-    BLACK:'#000000', WHITE:'#FFFFFF', DARK:'#1A1A2E'
+    BLACK:'#000000', WHITE:'#FFFFFF', DARK:'#1A1A2E',
+    // PixelForge UI色(融合)
+    PANEL:'#1B1B3A', PANEL_BORDER:'#3A3A6A',
+    TEAL:'#21BDAE', SUCCESS:'#50C878', DANGER:'#FF4757'
   };
 
   // ── 5种鬼 (经济文档§1) ──
@@ -69,10 +72,10 @@ var CONFIG = (function() {
   // ── 好感经验曲线 ──
   var FAVOR_LEVELS = [
     {level:1,expNeeded:0,miningIncome:5},
-    {level:2,expNeeded:3,miningIncome:10},
-    {level:3,expNeeded:8,miningIncome:20},
-    {level:4,expNeeded:15,miningIncome:35},
-    {level:5,expNeeded:25,miningIncome:50}
+    {level:2,expNeeded:1,miningIncome:10},
+    {level:3,expNeeded:3,miningIncome:20},
+    {level:4,expNeeded:6,miningIncome:35},
+    {level:5,expNeeded:10,miningIncome:50}
   ];
 
   // ── 打工参数 ──
@@ -85,7 +88,7 @@ var CONFIG = (function() {
   // ── 爆奖控制 ──
   var ROI = {windowSize:10,highThreshold:0.8,lowThreshold:0.4};
 
-  var START_COINS = 20;
+  var START_COINS = 100;
   var MENGPO_TREAT_PRICE = 20;
 
   // ── 字号3层 ──

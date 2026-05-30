@@ -132,16 +132,24 @@ var Mining = (function() {
   }
 
   function endMining() {
+    if (!active) return;
     active = false;
-    // 固定收入(由好感等级决定)
-    var income = State.getMiningIncome();
+    // ★ 按完成进度给比例工资
+    var elapsed = MINING_CFG.duration - timer;
+    var progress = M.min(1, elapsed / MINING_CFG.duration);
+    var fullIncome = State.getMiningIncome();
+    // 至少10%, 最多100%, 中途退出按进度比例
+    var income = M.max(1, M.ceil(fullIncome * M.max(0.1, progress)));
     State.set('coins', State.get('coins') + income);
     Renderer.spawnFloatingText(W/2, H/2, '+' + income + ' 铜钱', CONFIG.CO.COPPER);
-    State.changeStage('IDLE');  // ★ 回到IDLE，商店是独立入口
+    State.set('shopOpen', true);
+    State.changeStage('IDLE');
+    if (typeof ZhongKui !== 'undefined') ZhongKui.updateDOM();
   }
 
   function draw(ctx, t) {
     if (!active) return;
+    var M = Math;
 
     // 背景
     ctx.fillStyle = '#0D0D1A';
@@ -153,19 +161,51 @@ var Mining = (function() {
     ctx.fillStyle = CONFIG.CO.BONE;
     ctx.fillRect(W/2 - 3, 30, 6, 14);
 
-    // 钩绳
-    hookTipX = hookX + Math.sin(hookAngle) * hookLength;
-    hookTipY = hookY + Math.cos(hookAngle) * hookLength;
-    ctx.strokeStyle = CONFIG.CO.CHAIN;
-    ctx.lineWidth = 2;
+    // ★ 钩子方向指示(IDLE时也可见)
+    var showLength = hookLength;
+    if (hookState === HOOK.IDLE) showLength = 50; // IDLE时显示50px的摆动指示线
+
+    hookTipX = hookX + Math.sin(hookAngle) * showLength;
+    hookTipY = hookY + Math.cos(hookAngle) * showLength;
+
+    // IDLE时额外画摆动范围弧线(先画弧再画线, 让线覆盖在弧上)
+    if (hookState === HOOK.IDLE) {
+      ctx.strokeStyle = 'rgba(255,215,0,0.3)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(hookX, hookY, 50, M.PI/2 - MINING_CFG.hookSwing, M.PI/2 + MINING_CFG.hookSwing);
+      ctx.stroke();
+      // 原点圆
+      ctx.fillStyle = CONFIG.CO.COPPER_SHINE;
+      ctx.beginPath();
+      ctx.arc(hookX, hookY, 4, 0, M.PI*2);
+      ctx.fill();
+    }
+
+    // 绳/指示线
+    ctx.strokeStyle = hookState === HOOK.IDLE ? CONFIG.CO.COPPER_SHINE : CONFIG.CO.CHAIN;
+    ctx.lineWidth = hookState === HOOK.IDLE ? 3 : 2;
     ctx.beginPath();
     ctx.moveTo(hookX, hookY);
     ctx.lineTo(hookTipX, hookTipY);
     ctx.stroke();
 
-    // 钩头
-    ctx.fillStyle = CONFIG.CO.CHAIN_GLOW;
-    ctx.fillRect(hookTipX - 4, hookTipY - 4, 8, 8);
+    // ★ 钩头(箭头形状, 清晰显示方向)
+    ctx.fillStyle = hookState === HOOK.IDLE ? CONFIG.CO.COPPER_SHINE : CONFIG.CO.CHAIN_GLOW;
+    // 箭头: 沿钩方向的三角
+    var dx = hookTipX - hookX, dy = hookTipY - hookY;
+    var len = M.sqrt(dx*dx + dy*dy);
+    if (len > 0) {
+      var nx = dx/len, ny = dy/len;
+      var px = -ny, py = nx; // 垂直方向
+      var arrowSize = hookState === HOOK.IDLE ? 12 : 6;
+      ctx.beginPath();
+      ctx.moveTo(hookTipX + nx*arrowSize, hookTipY + ny*arrowSize);
+      ctx.lineTo(hookTipX + px*arrowSize*0.6, hookTipY + py*arrowSize*0.6);
+      ctx.lineTo(hookTipX - px*arrowSize*0.6, hookTipY - py*arrowSize*0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
 
     // 铜钱
     for (var i = 0; i < coins.length; i++) {
@@ -176,7 +216,6 @@ var Mining = (function() {
       ctx.rotate(c.rotation);
       ctx.fillStyle = CONFIG.CO.COPPER;
       ctx.fillRect(-c.size/2, -c.size/2, c.size, c.size);
-      // 方孔
       ctx.fillStyle = CONFIG.CO.VOID;
       ctx.fillRect(-2, -2, 4, 4);
       ctx.restore();
@@ -186,14 +225,24 @@ var Mining = (function() {
     ctx.font = CONFIG.FS.M + 'px monospace';
     ctx.textAlign = 'left';
     ctx.fillStyle = CONFIG.CO.BONE;
-    ctx.fillText('时间: ' + Math.ceil(timer) + 's', 10, 30);
+    ctx.fillText('时间: ' + Math.ceil(timer) + 's', 10, 25);
     ctx.textAlign = 'right';
     ctx.fillStyle = CONFIG.CO.COPPER;
-    ctx.fillText('已抓: ' + coinCount, W - 10, 30);
+    ctx.fillText('已抓: ' + coinCount, W - 10, 25);
+
+    // ★ 底部提示(IDLE时更醒目)
+    if (hookState === HOOK.IDLE) {
+      ctx.globalAlpha = 0.5 + M.sin(t * 4) * 0.4;
+      ctx.font = CONFIG.FS.L + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = CONFIG.CO.COPPER_SHINE;
+      ctx.fillText('点击射钩!', W/2, H - 20);
+      ctx.globalAlpha = 1;
+    }
   }
 
   return {
-    start:start, update:update, onTap:onTap, draw:draw,
+    start:start, update:update, onTap:onTap, draw:draw, endMining:endMining,
     isActive:function(){return active;}
   };
 })();

@@ -1,14 +1,14 @@
 /* state.js — GameState 响应式状态 + 阶段机
- * 阶段流程迁移套牛: IDLE→RUNNING→LASSO→HITTING→RESULT→SETTLE
+ * 阶段流程: IDLE→RUNNING(手动丢索)→LASSO(链动画)→HITTING(拉扯)→RESULT→SETTLE
  * 依赖：CONFIG
  * 暴露：State (全局) */
 
 var State = (function() {
   var _listeners = {};
   var _data = {
-    // ── 阶段机 (同套牛GS.stage) ──
-    // IDLE=待机投币, RUNNING=鬼群跑过(观察+倒计时),
-    // LASSO=丢链动画, HITTING=拍打, RESULT=判定动画, SETTLE=结算
+    // ── 阶段机 ──
+    // IDLE=待机投币, RUNNING=鬼群跑过(手动丢索),
+    // LASSO=丢链动画, HITTING=拉扯(双向位移), RESULT=判定动画, SETTLE=结算
     stage: 'IDLE',
     prevStage: null,
 
@@ -19,18 +19,18 @@ var State = (function() {
 
     // ── 回合数据 ──
     chains: [],           // 当前回合的链
-    hitCount: 0,          // 拍打次数 (同套牛)
-    hitTimer: 0,          // 拍打计时 (同套牛)
-    hitMax: 6,            // 拍打最长时间 (同套牛)
+    hitCount: 0,          // 拉扯次数
+    hitTimer: 0,          // 拉扯计时
+    hitMax: 6,            // 拉扯最长时间
     roundResult: null,    // 判定结果 (同套牛)
     roundCoins: 0,        // 本轮投币数 (同套牛)
     totalWin: 0,          // 本轮赢得 (同套牛)
     settleCoinsPaid: 0,   // 结算已支付 (同套牛)
 
-    // ── 跑过阶段子阶段 (同套牛runningSubPhase) ──
-    runningSubPhase: 'OBSERVE',  // OBSERVE→COUNTDOWN
-    observeTimer: 8,             // 观察时间 (同套牛8秒)
-    countdownTimer: 5,           // 倒计时 (同套牛5秒)
+    // ── 跑过阶段(保留兼容, 已改为手动丢索) ──
+    runningSubPhase: 'OBSERVE',
+    observeTimer: 8,
+    countdownTimer: 5,
 
     // ── buff系统 ──
     buffs: {

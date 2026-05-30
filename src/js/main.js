@@ -1,98 +1,87 @@
-/* main.js — 胶水：初始化 + requestAnimationFrame 主循环
- * 阶段流程迁移套牛: IDLE→RUNNING→LASSO→HITTING→RESULT→SETTLE
- * 投币机制迁移套牛: 底部按钮投币+开始, 鬼群跑过观察后自动丢链
- * 依赖：所有模块
- * 暴露：无(自动执行) */
+/* main.js — 主循环 + 渲染 + 游戏逻辑
+ * Bug#1: SETTLE stageTimer递增 + tw=0跳过结算
+ * Bug#2: Cookie存档 + 100币开局
+ * Bug#7: 孟婆UI缩小商品+放大看板娘
+ * Bug#9: 拉扯钓鱼节奏动画(拉远-拉近振荡)
+ * 依赖：所有模块 */
 
 (function() {
   var M = Math;
   var W = CONFIG.W, H = CONFIG.H;
   var CO = CONFIG.CO, LY = CONFIG.LY, FS = CONFIG.FS;
   var canvas, ctx;
-  var lastTime = 0;
-  var totalTime = 0;
-  var frameCount = 0;  // 帧计数 (同套牛fr)
+  var lastTime = 0, totalTime = 0;
 
-  // ── 初始化 ──
   function init() {
     canvas = document.getElementById('gc');
     ctx = canvas.getContext('2d');
     Renderer.init(canvas);
     Audio.init();
-    loadSave();       // ★ 先加载存档
+    loadSave();
+    initBackground(); // T2.3 预计算背景元素
     ZhongKui.init();
     State.changeStage('IDLE');
-    console.log('[钟馗] 初始化完成, 分辨率:', W, 'x', H, '铜钱:', State.get('coins'));
+    console.log('[钟馗] 初始化完成', W, 'x', H, '铜钱:', State.get('coins'));
   }
 
-  // ── 主循环 ──
   function loop(timestamp) {
     requestAnimationFrame(loop);
     var dt = (timestamp - lastTime) / 1000;
     lastTime = timestamp;
     if (dt > 0.1) dt = 0.016;
     totalTime += dt;
-    frameCount++;
-
     State.set('time', totalTime);
-
-    // 更新
     update(dt);
-
-    // 渲染
     render(dt);
   }
 
-  // ── 更新逻辑 (同套牛update) ──
   function update(dt) {
     var stage = State.get('stage');
 
-    // 震屏+粒子+飘字
+    // 设置面板打开时暂停一切
+    if (typeof ZhongKui !== 'undefined' && ZhongKui.isSettingsOpen()) return;
+
     Renderer.updateShake(dt);
     Renderer.updateParticles(dt);
     Renderer.updateFloatingTexts(dt);
+    Renderer.updateFlash(dt);
+    Renderer.updateCoinFlies(dt);
 
-    // 孟婆台词计时
     var lineTimer = State.get('mengpoLineTimer');
     if (lineTimer > 0) State.set('mengpoLineTimer', lineTimer - dt);
 
-    // 商店时不更新游戏逻辑
-    if (State.get('shopOpen')) return;
+    if (State.get('shopOpen') && stage !== 'MINING') return;
 
     switch(stage) {
       case 'IDLE':
-        // 待机: 鬼群持续在背景跑过 (同套牛IDLE)
         Ghosts.update(dt);
         break;
 
       case 'RUNNING':
-        // 鬼群跑过: 更新鬼位置 (同套牛RUNNING)
         Ghosts.update(dt);
-
-        var subPhase = State.get('runningSubPhase');
-        if (subPhase === 'OBSERVE') {
-          var obsTimer = State.get('observeTimer') - dt;
-          State.set('observeTimer', obsTimer);
-          // 全部进入屏幕内才切换
-          var allIn = Ghosts.allVisible();
-          if (obsTimer <= 0 || allIn) {
-            State.set('runningSubPhase', 'COUNTDOWN');
-          }
-        } else {
-          var cdTimer = State.get('countdownTimer') - dt;
-          State.set('countdownTimer', cdTimer);
-          if (cdTimer <= 0) {
-            doLasso();  // 倒计时结束，自动丢链 (同套牛doLasso)
-          }
-        }
+        var rt = State.get('stageTimer') + dt;
+        State.set('stageTimer', rt);
+        if (rt >= 20) doLasso();
         break;
 
       case 'LASSO':
-        // 丢链动画0.5秒 (同套牛LASSO)
         var st = State.get('stageTimer') + dt;
         State.set('stageTimer', st);
         Ghosts.update(dt);
         if (st >= 0.5) {
+          Ghosts.pause();
+          var chains = State.get('chains');
+          if (chains) {
+            for (var i = 0; i < chains.length; i++) {
+              var tg = chains[i].targetGhost;
+              if (tg) {
+                chains[i].originX = tg.x;
+                chains[i].originY = tg.y;
+                chains[i].renderX = tg.x;
+                chains[i].renderY = tg.y;
+              }
+            }
+          }
           State.changeStage('HITTING');
           State.set('hitCount', 0);
           State.set('hitTimer', 0);
@@ -100,35 +89,51 @@
         break;
 
       case 'HITTING':
-        // 拍打阶段 (同套牛HITTING)
         var hitTimer = State.get('hitTimer') + dt;
         State.set('hitTimer', hitTimer);
-        Ghosts.update(dt);
-        if (hitTimer >= State.get('hitMax')) {
-          doCalc();  // 拍打时间到，判定 (同套牛calc)
-        }
+        updatePullPositions();
+        if (hitTimer >= State.get('hitMax')) doCalc();
         break;
 
       case 'RESULT':
-        // 判定动画3.5秒 (同套牛RESULT)
-        var rt = State.get('stageTimer') + dt;
-        State.set('stageTimer', rt);
-        Ghosts.update(dt);
-        if (rt >= 3.5) {
-          State.changeStage('SETTLE');
-          State.set('settleCoinsPaid', 0);
-          // 计算总赢得
-          var tw = 0;
+        var resT = State.get('stageTimer') + dt;
+        State.set('stageTimer', resT);
+        if (resT >= 3.5) {
+          // ★ Bug#1: tw=0时跳过SETTLE直接回IDLE
           var results = State.get('roundResult') || [];
-          for (var i = 0; i < results.length; i++) {
-            if (results[i].success) tw += results[i].odds;
+          var tw = 0;
+          for (var i = 0; i < results.length; i++) { if (results[i].success) tw += results[i].odds; }
+
+          if (tw <= 0) {
+            // 没套中: 直接回IDLE, 不进SETTLE
+            State.changeStage('IDLE');
+            State.set('roundResult', null);
+            State.set('chains', []);
+            State.set('totalWin', 0);
+            State.set('coinsInserted', 0);
+            Ghosts.resume();
+            saveGame();
+            ZhongKui.exitCoinMode();
+            ZhongKui.updateDOM();
+          } else {
+            State.changeStage('SETTLE');
+            State.set('settleCoinsPaid', 0);
+            State.set('totalWin', tw);
           }
-          State.set('totalWin', tw);
         }
         break;
 
       case 'SETTLE':
-        // 结算 (同套牛SETTLE)
+        // ★ Bug#1: 递增stageTimer(之前缺失导致卡死!)
+        var stlT = State.get('stageTimer') + dt;
+        State.set('stageTimer', stlT);
+        var tw = State.get('totalWin');
+        var cp = M.min(tw, M.floor(stlT * 10));
+        State.set('settleCoinsPaid', cp);
+        // 自动推进: 币数数完+最小0.8s
+        if (stlT > 0.8 && cp >= tw) {
+          doSettle();
+        }
         break;
 
       case 'MINING':
@@ -137,103 +142,108 @@
     }
   }
 
-  // ── 丢链 (同套牛doLasso) ──
+  // ★ Bug#9: 钓鱼节奏动画(拉远-拉近振荡, 不拉到身旁)
+  function updatePullPositions() {
+    var chains = State.get('chains');
+    if (!chains) return;
+    var centerX = W / 2;
+    var zhongkuiY = LY.ZHONGKUI_Y;
+    var pr = M.min(State.get('hitTimer') / State.get('hitMax'), 1);
+
+    for (var i = 0; i < chains.length; i++) {
+      var chain = chains[i];
+      // 基础进度: 只靠拢到35%位置(不拉到身旁)
+      var basePr = pr * 0.35;
+      // 振荡: 正弦波模拟拉远-拉近节奏
+      var rhythmAmp = 0.1 * (1 - pr * 0.6);
+      var rhythm = M.sin(pr * M.PI * 6) * rhythmAmp;
+      var effectivePr = M.max(0, basePr + rhythm);
+
+      chain.renderX = chain.originX + (centerX - chain.originX) * effectivePr;
+      chain.renderY = chain.originY + (zhongkuiY - chain.originY) * effectivePr;
+    }
+  }
+
   function doLasso() {
     if (State.get('stage') !== 'RUNNING') return;
     State.changeStage('LASSO');
     Audio.play('chain');
 
-    // 套链目标: 屏幕内所有可见鬼，按距中央排序 (同套牛doLasso)
     var roundCoins = State.get('roundCoins');
     var targets = Ghosts.getTargets(roundCoins);
-
-    // 构建链 (同套牛ropes)
     var chains = [];
     for (var i = 0; i < targets.length; i++) {
       var g = targets[i];
       chains.push({
         targetGhost: g,
-        targetX: g.x,
-        targetY: g.y,
-        odds: g.odds,
-        ghostType: g.type,
-        caught: false,
-        isSuper: false
+        originX: g.x, originY: g.y,
+        renderX: g.x, renderY: g.y,
+        targetX: g.x, targetY: g.y,
+        odds: g.odds, ghostType: g.type,
+        caught: false, isSuper: false
       });
     }
-    // 杨枝甘露: 第1条链x10概率
     var buffs = State.get('buffs');
-    if (buffs.special_super && chains.length > 0) {
-      chains[0].isSuper = true;
-    }
-
+    if (buffs.special_super && chains.length > 0) chains[0].isSuper = true;
     State.set('chains', chains);
+    ZhongKui.updateDOM();
   }
 
-  // ── 拍打 (同套牛doHit) ──
-  function doHit() {
-    if (State.get('stage') !== 'HITTING') return;
-    State.set('hitCount', State.get('hitCount') + 1);
-    Audio.play('hit');
-    Renderer.triggerShake(1);
-  }
-
-  // ── 判定 (同套牛calc) ──
   function doCalc() {
     State.changeStage('RESULT');
     var chains = State.get('chains');
-
-    // 判定: catchP此时才骰 (同套牛calc: M.random()<p)
     var results = Physics.resolveChains(chains);
     State.set('roundResult', results.details);
 
     var totalWin = results.totalWin;
-    var anyCaught = results.anyCaught;
-
-    if (anyCaught) {
+    if (results.anyCaught) {
       State.set('coins', State.get('coins') + totalWin);
       Renderer.spawnFloatingText(W/2, 200, '+' + totalWin + ' 铜钱', CO.COPPER_SHINE);
       Renderer.spawnParticles(W/2, 180, CO.COPPER_SHINE, 10);
-      var roundCoins = State.get('roundCoins');
-      if (totalWin >= roundCoins * 5) {
+      // T2.5 GameJuice: 铜钱飞入HUD
+      Renderer.spawnCoinFly(W/2, 180, 20, 15);
+      if (totalWin >= State.get('roundCoins') * 5) {
         Audio.play('bigwin');
         Renderer.triggerShake(10);
+        Renderer.triggerFlash(CO.COPPER_SHINE, 0.4); // BIG WIN闪金
       } else {
         Audio.play('catchOk');
+        Renderer.triggerFlash('#FFF', 0.15); // 普通闪白
+      }
+      // 鬼消散粒子
+      var chains = State.get('chains');
+      for (var i = 0; i < chains.length; i++) {
+        var ch = chains[i];
+        var ghost = CONFIG.GT[ch.ghostType];
+        Renderer.spawnDissolveParticles(ch.renderX || ch.originX, ch.renderY || ch.originY, ghost.glow, 6);
       }
     } else {
       Audio.play('escape');
       Renderer.spawnFloatingText(W/2, 200, '跑了...', CO.BLOOD);
     }
-
-    // ROI记录 (同套牛payoutHistory)
-    State.updateROI({ spent: State.get('roundCoins'), won: totalWin });
-
-    // buff回合--
+    State.updateROI({spent: State.get('roundCoins'), won: totalWin});
     State.tickBuffs();
-
-    // 投币清零 (同套牛GS.coinsInserted=0)
     State.set('coinsInserted', 0);
+    ZhongKui.exitCoinMode();
+    ZhongKui.updateDOM();
   }
 
-  // ── 结算完成回到待机 (同套牛doSettle) ──
   function doSettle() {
     if (State.get('stage') !== 'SETTLE') return;
-    var tw = State.get('totalWin');
-    var se = State.get('stageTimer');
-    var cp = State.get('settleCoinsPaid');
-    if (cp < tw && se < tw / 10 + 0.5) return;
-
     State.changeStage('IDLE');
     State.set('roundResult', null);
     State.set('chains', []);
     State.set('totalWin', 0);
     State.set('settleCoinsPaid', 0);
-    // 存档
+    State.set('coinsInserted', 0);
+    Ghosts.resume();
     saveGame();
+    ZhongKui.exitCoinMode();
+    ZhongKui.updateDOM();
   }
 
-  // ── 渲染 ──
+  // ════════════════ 渲染 ════════════════
+
   function render(dt) {
     var stage = State.get('stage');
     var t = totalTime;
@@ -242,17 +252,23 @@
     ctx.save();
     Renderer.applyShake();
 
-    // 商店覆盖渲染
-    if (State.get('shopOpen')) {
+    // 设置面板(最顶层)
+    if (typeof ZhongKui !== 'undefined' && ZhongKui.isSettingsOpen()) {
+      drawBackground(t);
+      ZhongKui.drawSettings(ctx, totalTime);
+      ctx.restore();
+      return;
+    }
+
+    if (State.get('shopOpen') && stage !== 'MINING') {
       drawBackground(t);
       Ghosts.draw(ctx, t);
-      drawShopUI();
+      drawShopUI(t);
       Renderer.drawHUD();
       ctx.restore();
       return;
     }
 
-    // 打工场景
     if (stage === 'MINING') {
       Mining.draw(ctx, t);
       Renderer.drawHUD();
@@ -260,182 +276,167 @@
       return;
     }
 
-    // 清屏+背景
     Renderer.clear();
     drawBackground(t);
-
-    // ── 鬼 ──
-    if (stage !== 'MINING') {
-      Ghosts.draw(ctx, t);
-    }
-
-    // ── 钟馗 ──
+    if (stage !== 'MINING') Ghosts.draw(ctx, t);
     ZhongKui.draw(ctx, t);
-
-    // ── 粒子 ──
     Renderer.drawParticles();
+    Renderer.drawCoinFlies();
     Renderer.drawFloatingTexts();
 
-    // ── 阶段专属UI (同套牛switch) ──
     switch(stage) {
-      case 'IDLE':
-        drawIdleUI(t);
-        break;
-      case 'RUNNING':
-        drawRunningUI(t, se);
-        break;
-      case 'LASSO':
-        drawLassoUI(t, M.min(se / 0.5, 1));
-        break;
-      case 'HITTING':
-        drawHittingUI(t, se);
-        break;
-      case 'RESULT':
-        drawResultUI(t, M.min(se / 3.5, 1));
-        break;
-      case 'SETTLE':
-        drawSettleUI(t, se);
-        break;
+      case 'IDLE': drawIdleUI(t); break;
+      case 'RUNNING': drawRunningUI(t, se); break;
+      case 'LASSO': drawLassoUI(t, M.min(se / 0.5, 1)); break;
+      case 'HITTING': drawHittingUI(t); break;
+      case 'RESULT': drawResultUI(t, M.min(se / 3.5, 1)); break;
+      case 'SETTLE': drawSettleUI(t, se); break;
     }
 
-    // ── HUD ──
     Renderer.drawHUD();
     Renderer.drawMengpoLine();
-
+    Renderer.drawFlash();
     ctx.restore();
   }
 
-  // ── 背景渲染 ──
+  // ── T2.3 场景渲染: 冥界天空+鬼火星点+黄泉山脉+竞技场暗角 ──
+  var _starPositions = null;
+  var _mountainPath = null;
+
+  function initBackground() {
+    // 预计算鬼火星点位置(确定性随机)
+    _starPositions = [];
+    var M2 = Math;
+    for (var i = 0; i < 20; i++) {
+      _starPositions.push({
+        x: M2.floor(M2.random() * W),
+        y: M2.floor(LY.HUD_H + 10 + M2.random() * (LY.SKY_H - 20)),
+        phase: M2.random() * M2.PI * 2,
+        size: 1 + M2.floor(M2.random() * 2)
+      });
+    }
+    // 预生成山脉Path2D
+    _mountainPath = new Path2D();
+    _mountainPath.moveTo(0, LY.ARENA_Y);
+    for (var x = 0; x <= W; x += 4) {
+      _mountainPath.lineTo(x, LY.ARENA_Y - (8 + M2.sin(x * 0.04) * 6 + M2.sin(x * 0.07) * 3));
+    }
+    _mountainPath.lineTo(W, LY.ARENA_Y);
+    _mountainPath.closePath();
+  }
+
   function drawBackground(t) {
-    // 天空
-    ctx.fillStyle = CO.DUSK;
+    // 1. 冥界天空(线性渐变)
+    var sky = ctx.createLinearGradient(0, LY.HUD_H, 0, LY.HUD_H + LY.SKY_H);
+    sky.addColorStop(0, CO.VOID);
+    sky.addColorStop(0.5, CO.DUSK);
+    sky.addColorStop(1, CO.FOG);
+    ctx.fillStyle = sky;
     ctx.fillRect(0, LY.HUD_H, W, LY.SKY_H);
-    // 竞技场
+
+    // 2. 鬼火星点(lighter叠光)
+    if (_starPositions) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (var i = 0; i < _starPositions.length; i++) {
+        var s = _starPositions[i];
+        var blink = (M.sin(t * (1 + (i % 5) * 0.4) + s.phase) + 1) * 0.5;
+        var r = s.size + blink * 2;
+        var grd = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r);
+        grd.addColorStop(0, 'rgba(57,255,20,' + (0.5 + blink * 0.5) + ')');
+        grd.addColorStop(1, 'rgba(57,255,20,0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(s.x - r, s.y - r, r * 2, r * 2);
+      }
+      ctx.restore();
+    }
+
+    // 3. 黄泉山脉(Path2D缓存 + shadowBlur微光)
+    if (_mountainPath) {
+      ctx.shadowColor = '#39FF14';
+      ctx.shadowBlur = 2;
+      ctx.fillStyle = '#1C1033';
+      ctx.fill(_mountainPath);
+      ctx.shadowBlur = 0;
+    }
+
+    // 4. 竞技场(暗紫背景 + 径向渐变暗角)
     ctx.fillStyle = '#180E22';
     ctx.fillRect(0, LY.ARENA_Y, W, LY.ARENA_H);
-    // 钟馗区
+    var vignette = ctx.createRadialGradient(W / 2, LY.ARENA_Y + LY.ARENA_H / 2, 30, W / 2, LY.ARENA_Y + LY.ARENA_H / 2, LY.ARENA_H * 0.7);
+    vignette.addColorStop(0, 'rgba(24,14,34,0)');
+    vignette.addColorStop(1, 'rgba(13,13,26,0.6)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, LY.ARENA_Y, W, LY.ARENA_H);
+
+    // 5. 钟馗站位区(迷雾过渡)
     ctx.fillStyle = CO.FOG;
     ctx.fillRect(0, LY.ZHONGKUI_Y - 20, W, 40);
-    // 底区
+
+    // 6. 底部暗区
     ctx.fillStyle = CO.VOID;
     ctx.fillRect(0, LY.BOTTOM_Y - 20, W, LY.BOTTOM_H + 20);
   }
 
-  // ── 待机UI (线框图: 画布内显示标题+提示，投币选择器在zhongkui.js) ──
   function drawIdleUI(t) {
     var inserted = State.get('coinsInserted');
     var coins = State.get('coins');
 
-    // 标题 (线框图: 游戏演出区中央)
     ctx.font = 'bold ' + FS.L + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.COPPER_SHINE;
     ctx.fillText('黑笑话：钟馗', W/2, 180);
 
-    if (ZhongKui.isCoinSelectorOpen()) {
-      // 投币选择器打开中
-      ctx.font = FS.M + 'px monospace';
-      ctx.fillStyle = CO.BONE;
-      ctx.fillText('选择投币数后按「确认」', W/2, 220);
-
-      // 渲染投币选择器
-      ZhongKui.drawCoinSelector(ctx, t);
-    } else {
-      // 未投币: 提示按主操作按钮
-      ctx.font = FS.M + 'px monospace';
-      ctx.fillStyle = CO.BONE;
-      ctx.fillText('按「投币」开始游戏', W/2, 220);
-      ctx.font = FS.S + 'px monospace';
-      ctx.fillStyle = '#A0A0C0';
-      ctx.fillText('持有 ' + coins + ' 铜钱', W/2, 244);
-
-      // 打工入口 (线框图: 游戏演出区下方)
-      var workBtnX = W/2 - 50, workBtnY = 360, workBtnW = 100, workBtnH = 28;
-      ctx.fillStyle = '#1B1B3A';
-      ctx.fillRect(workBtnX, workBtnY, workBtnW, workBtnH);
-      ctx.strokeStyle = '#3A3A6A';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(workBtnX + 1, workBtnY + 1, workBtnW - 2, workBtnH - 2);
-      ctx.font = FS.S + 'px monospace';
-      ctx.textAlign = 'center';
+    if (inserted > 0) {
+      ctx.font = 'bold ' + FS.L + 'px monospace';
       ctx.fillStyle = CO.COPPER;
-      ctx.fillText('打工赚币', W/2, workBtnY + 18);
+      ctx.fillText(inserted + ' 币', W/2, 220);
+      ctx.font = FS.S + 'px monospace';
+      ctx.fillStyle = CO.BONE;
+      ctx.fillText('按「开始」丢索套鬼', W/2, 244);
+    } else {
+      ctx.font = FS.M + 'px monospace';
+      ctx.fillStyle = CO.BONE;
+      ctx.fillText('按「开始」投币', W/2, 220);
     }
+    ctx.font = FS.S + 'px monospace';
+    ctx.fillStyle = '#A0A0C0';
+    ctx.fillText('持有 ' + coins + ' 铜钱', W/2, 270);
+
+    // 打工入口已移至商店(孟婆→), 主界面不再显示
   }
 
-  // ── 鬼群跑过UI (同套牛sRun) ──
   function drawRunningUI(t, se) {
-    var subPhase = State.get('runningSubPhase');
-    if (subPhase === 'COUNTDOWN') {
-      var cdTimer = State.get('countdownTimer');
-      var sec = M.ceil(cdTimer);
-      var pl = 1 + (cdTimer % 1 < 0.3 ? 0.15 : 0);
-      ctx.globalAlpha = 0.6 + (cdTimer % 1 < 0.5 ? 0.3 : 0);
-      ctx.font = 'bold ' + M.floor(FS.L * pl) + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#FF4444';
-      ctx.fillText(String(sec), W/2, 350);
-      ctx.globalAlpha = 1;
-      // 倒计时边框闪烁
-      if (M.floor(t * 10) % 2 === 0) {
-        ctx.strokeStyle = '#FF4444';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(2, 2, W - 4, 4);
-        ctx.strokeRect(2, H - 6, W - 4, 4);
-      }
-    } else {
-      ctx.globalAlpha = 0.4 + M.sin(t * 6) * 0.2;
-      ctx.font = FS.M + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = CO.BONE;
-      ctx.fillText('观察鬼群中...', W/2, 350);
-      ctx.globalAlpha = 1;
-    }
-
-    // 底部提示
-    ctx.font = FS.S + 'px monospace';
+    ctx.globalAlpha = 0.5 + M.sin(t * 4) * 0.3;
+    ctx.font = FS.M + 'px monospace';
     ctx.textAlign = 'center';
+    ctx.fillStyle = CO.COPPER_SHINE;
+    ctx.fillText('按「丢索」套鬼!', W/2, 350);
+    ctx.globalAlpha = 1;
+    ctx.font = FS.S + 'px monospace';
     ctx.fillStyle = CO.COPPER;
     ctx.fillText('投币 ' + State.get('roundCoins') + ' 链', W/2, LY.BOTTOM_Y + 30);
   }
 
-  // ── 丢链动画 (同套牛sLasso) ──
   function drawLassoUI(t, progress) {
     var chains = State.get('chains');
     if (!chains) return;
-
-    // 命中瞬间震屏 (同套牛)
     if (progress > 0.95) Renderer.triggerShake(3);
-
-    // 链飞出减速 (同套牛outQuad)
-    var ep = progress * (2 - progress);  // outQuad
-
-    var originX = W / 2;
-    var originY = LY.ZHONGKUI_Y;
-
+    var ep = progress * (2 - progress);
+    var originX = W / 2, originY = LY.ZHONGKUI_Y;
     for (var i = 0; i < chains.length; i++) {
       var chain = chains[i];
       var tg = chain.targetGhost;
-      var tx, ty2;
-      if (tg) { tx = tg.x; ty2 = tg.y; }
-      else { tx = chain.targetX; ty2 = chain.targetY; }
-
-      // 链端点 (飞向目标)
+      var tx = tg ? tg.x : chain.targetX;
+      var ty2 = tg ? tg.y : chain.targetY;
       var cx = originX + M.floor((tx - originX) * ep);
       var cy = originY + M.floor((ty2 - originY) * ep) - M.floor(M.sin(ep * M.PI) * 50);
-
-      // 画链 (同套牛rope: 二次贝塞尔)
-      var chainColor = chain.isSuper ? CO.COPPER_SHINE : CO.CHAIN;
-      ctx.strokeStyle = chainColor;
+      ctx.strokeStyle = chain.isSuper ? CO.COPPER_SHINE : CO.CHAIN;
       ctx.lineWidth = chain.isSuper ? 3 : 1.5;
       ctx.beginPath();
       ctx.moveTo(originX, originY);
-      var midX = M.floor((originX + cx) / 2);
-      var midY = M.floor((originY + cy) / 2) + 20;
-      ctx.quadraticCurveTo(midX, midY, cx, cy);
+      ctx.quadraticCurveTo(M.floor((originX+cx)/2), M.floor((originY+cy)/2)+20, cx, cy);
       ctx.stroke();
-
-      // 赔率标签
       ctx.font = FS.S + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = CO.COPPER_SHINE;
@@ -443,333 +444,325 @@
     }
   }
 
-  // ── 拍打UI (同套牛sHit) ──
-  function drawHittingUI(t, se) {
+  // ★ Bug#9: 钓鱼节奏HITTING UI(renderX/Y振荡, 不拉到身旁)
+  function drawHittingUI(t) {
     var chains = State.get('chains');
+    var hitCount = State.get('hitCount');
     var hitTimer = State.get('hitTimer');
     var hitMax = State.get('hitMax');
     var pr = M.min(hitTimer / hitMax, 1);
 
-    // 半透明遮罩 (同套牛)
     ctx.fillStyle = 'rgba(26,10,0,0.35)';
     ctx.fillRect(0, LY.HUD_H, W, H - LY.HUD_H);
 
-    // 画链+被套住的鬼(挣扎)
-    var originX = W / 2;
-    var originY = LY.ZHONGKUI_Y;
-    var pullProgress = pr;  // 拉近进度
+    var originX = W / 2, originY = LY.ZHONGKUI_Y;
 
     if (chains) {
       for (var i = 0; i < chains.length; i++) {
         var chain = chains[i];
-        var tg = chain.targetGhost;
-        if (!tg) continue;
+        var px = M.floor(chain.renderX);
+        var py = M.floor(chain.renderY);
 
-        // 被拉近的效果
-        var px = M.floor(tg.x - (tg.x - originX) * pullProgress);
-        var py = tg.y;
-
-        // 画鬼(挣扎态)
-        var ghost = CONFIG.GT[tg.type];
+        var ghost = CONFIG.GT[chain.ghostType];
         var w = ghost.size[0], h = ghost.size[1];
+        // 挣扎抖动(随进度减弱)
+        var shake = (1 - pr) * 4;
+        var sx = M.floor((M.random()-0.5)*shake);
+        var sy = M.floor((M.random()-0.5)*shake);
+
         ctx.fillStyle = ghost.color;
-        ctx.fillRect(px - w / 2, py - h / 2, w, h);
-        // 挣扎眼
+        ctx.fillRect(px-M.floor(w/2)+sx, py-M.floor(h/2)+sy, w, h);
         ctx.fillStyle = '#FF0000';
-        ctx.fillRect(px - 3, py - 2, 2, 2);
-        ctx.fillRect(px + 2, py - 2, 2, 2);
+        ctx.fillRect(px-3+sx, py-2+sy, 2, 2);
+        ctx.fillRect(px+2+sx, py-2+sy, 2, 2);
 
         // 画链
-        var chainColor = chain.isSuper ? CO.COPPER_SHINE : CO.CHAIN;
-        ctx.strokeStyle = chainColor;
+        ctx.strokeStyle = chain.isSuper ? CO.COPPER_SHINE : CO.CHAIN;
         ctx.lineWidth = chain.isSuper ? 3 : 1.5;
         ctx.beginPath();
         ctx.moveTo(originX, originY);
-        var midX = M.floor((originX + px) / 2);
-        var midY = M.floor((originY + py) / 2) + 15;
-        ctx.quadraticCurveTo(midX, midY, px, py);
+        ctx.quadraticCurveTo(M.floor((originX+px)/2), M.floor((originY+py)/2)+15, px, py);
         ctx.stroke();
 
-        // 赔率
         ctx.font = FS.S + 'px monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = CO.COPPER_SHINE;
-        ctx.fillText('x' + chain.odds, px, py - h / 2 - 8);
+        ctx.fillText('x' + chain.odds, px, py - M.floor(h/2) - 8);
       }
     }
 
-    // 拍打提示
-    var hitCount = State.get('hitCount');
     ctx.font = FS.L + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.GHOST_GREEN;
-    ctx.fillText(hitCount + ' 连击', W/2, LY.BOTTOM_Y - 10);
+    ctx.fillText(hitCount + ' 拉扯', W/2, LY.BOTTOM_Y - 10);
 
-    // 进度条
     ctx.fillStyle = '#333';
-    ctx.fillRect(40, LY.BOTTOM_Y + 2, W - 80, 6);
+    ctx.fillRect(40, LY.BOTTOM_Y+2, W-80, 6);
     ctx.fillStyle = pr > 0.5 ? CO.COPPER : '#FF4444';
-    ctx.fillRect(40, LY.BOTTOM_Y + 2, M.floor((W - 80) * (1 - pr)), 6);
+    ctx.fillRect(40, LY.BOTTOM_Y+2, M.floor((W-80)*(1-pr)), 6);
   }
 
-  // ── 判定动画 (同套牛sResult) ──
   function drawResultUI(t, progress) {
     var results = State.get('roundResult') || [];
-    var tw = 0;
-    var successes = [], failures = [];
+    var tw = 0, successes = [], failures = [];
     for (var i = 0; i < results.length; i++) {
       if (results[i].success) { tw += results[i].odds; successes.push(results[i]); }
       else failures.push(results[i]);
     }
-
-    // 半透明遮罩
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.fillRect(0, LY.HUD_H, W, H - LY.HUD_H);
 
-    // 成功: 落地动画
+    // ★ Bug#9: 成功的鬼→拉至身旁动画(判定成功后才播放)
     for (var i = 0; i < successes.length; i++) {
       var r = successes[i];
-      var lp = M.min(1, progress * 1.5 - i * 0.15);
+      var lp = M.min(1, progress*1.5 - i*0.15);
       if (lp <= 0) continue;
-
       var n = successes.length;
-      var startX = 160, startY = 240;
-      var endX = 160 - (n - 1) * 28 + i * 56;
-      var endY = 300;
-
-      // 弹跳落地 (同套牛outBounce)
-      var bounce = lp < 0.5 ? 2 * lp * lp : 1 - M.pow(-2 * lp + 2, 2) / 2;
-      var px = startX + (endX - startX) * bounce;
-      var py = startY + (endY - startY) * bounce - M.sin(lp * M.PI) * 90;
-
-      // 画鬼
+      var endX = 160-(n-1)*28+i*56, endY = 300;
+      var bounce = lp<0.5 ? 2*lp*lp : 1-M.pow(-2*lp+2,2)/2;
+      var px = 160+(endX-160)*bounce;
+      var py = 240+(endY-240)*bounce - M.sin(lp*M.PI)*90;
       var ghost = CONFIG.GT[r.ghostType];
       var w = ghost.size[0], h = ghost.size[1];
       ctx.fillStyle = ghost.color;
-      ctx.fillRect(M.floor(px - w / 2), M.floor(py - h / 2), w, h);
-      // 眩晕眼
+      ctx.fillRect(M.floor(px-w/2), M.floor(py-h/2), w, h);
       ctx.fillStyle = '#FF0000';
-      ctx.fillRect(M.floor(px - 3), M.floor(py - 2), 2, 2);
-      ctx.fillRect(M.floor(px + 2), M.floor(py - 2), 2, 2);
-
-      // 赔率
+      ctx.fillRect(M.floor(px-3), M.floor(py-2), 2, 2);
+      ctx.fillRect(M.floor(px+2), M.floor(py-2), 2, 2);
       ctx.font = FS.M + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = CO.GHOST_GREEN;
-      ctx.fillText('x' + r.odds, M.floor(px + 22), M.floor(py - 20));
+      ctx.fillText('x'+r.odds, M.floor(px+22), M.floor(py-20));
       ctx.font = FS.S + 'px monospace';
       ctx.fillStyle = CO.BONE;
-      ctx.fillText(ghost.name, M.floor(px + 22), M.floor(py - 8));
+      ctx.fillText(ghost.name, M.floor(px+22), M.floor(py-8));
     }
-
-    // 失败: 逃跑
     for (var i = 0; i < failures.length; i++) {
       var r = failures[i];
-      var ep = M.min(1, progress * 1.2 - i * 0.1);
+      var ep = M.min(1, progress*1.2-i*0.1);
       if (ep <= 0) continue;
-      var fx = 290 * ep;
-      var fy = 230 + i * 28;
-
+      var fx = 290*ep, fy = 230+i*28;
       var ghost = CONFIG.GT[r.ghostType];
       var w = ghost.size[0], h = ghost.size[1];
       ctx.fillStyle = ghost.color;
-      ctx.fillRect(M.floor(fx - w / 2), M.floor(fy - h / 2), w, h);
-      // 嘲讽眼
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(M.floor(fx - 3), M.floor(fy - 2), 2, 2);
-      ctx.fillRect(M.floor(fx + 2), M.floor(fy - 2), 2, 2);
-
+      ctx.fillRect(M.floor(fx-w/2), M.floor(fy-h/2), w, h);
+      ctx.fillStyle = '#FFF';
+      ctx.fillRect(M.floor(fx-3), M.floor(fy-2), 2, 2);
+      ctx.fillRect(M.floor(fx+2), M.floor(fy-2), 2, 2);
       ctx.font = FS.S + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#FF4444';
-      ctx.fillText(ghost.name + ' 逃脱', 150, M.floor(fy));
+      ctx.fillText(ghost.name+' 逃脱', 150, M.floor(fy));
     }
-
-    // 总赢得
-    ctx.font = 'bold ' + FS.L + 'px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = CO.COPPER_SHINE;
-    ctx.fillText('获得 ' + tw + ' 币', W/2, 410);
-
-    // Big Win (同套牛)
+    if (tw > 0) {
+      ctx.font = 'bold '+FS.L+'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = CO.COPPER_SHINE;
+      ctx.fillText('获得 '+tw+' 币', W/2, 410);
+    }
     var roundCoins = State.get('roundCoins');
-    if (tw >= roundCoins * 5 && tw > 0) {
-      ctx.globalAlpha = M.max(0, 0.3 * M.sin(progress * M.PI));
+    if (tw >= roundCoins*5 && tw > 0) {
+      ctx.globalAlpha = M.max(0, 0.3*M.sin(progress*M.PI));
       ctx.fillStyle = CO.COPPER_SHINE;
       ctx.fillRect(0, 0, W, H);
       ctx.globalAlpha = 1;
-      ctx.font = 'bold ' + FS.L + 'px monospace';
-      ctx.fillStyle = CO.COPPER_SHINE;
+      ctx.font = 'bold '+FS.L+'px monospace';
       ctx.fillText('BIG WIN!', W/2, 180);
     }
   }
 
-  // ── 结算UI (同套牛sSettle) ──
   function drawSettleUI(t, se) {
     var tw = State.get('totalWin');
-    var results = State.get('roundResult') || [];
-    var cp = M.min(tw, M.floor(se * 10));
-    State.set('settleCoinsPaid', cp);
-
-    // 背景
+    var cp = State.get('settleCoinsPaid');
     drawBackground(t);
     Ghosts.draw(ctx, t);
-
-    // 半透明遮罩
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(0, LY.HUD_H, W, H - LY.HUD_H);
-
-    // 金币数字
+    ctx.fillRect(0, LY.HUD_H, W, H-LY.HUD_H);
     ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.COPPER_SHINE;
-    ctx.fillText(String(cp).padStart(3, '0'), W/2, 150);
-
-    // 成功的鬼
+    ctx.fillText(String(cp).padStart(3,'0'), W/2, 150);
+    var results = State.get('roundResult') || [];
     var successes = [];
-    for (var i = 0; i < results.length; i++) {
-      if (results[i].success) successes.push(results[i]);
-    }
-    var scStart = successes.length > 0 ? (W - (successes.length - 1) * 55) / 2 : 0;
+    for (var i = 0; i < results.length; i++) { if (results[i].success) successes.push(results[i]); }
+    var scStart = successes.length > 0 ? (W-(successes.length-1)*55)/2 : 0;
     for (var i = 0; i < successes.length; i++) {
-      var r = successes[i];
-      var cx = scStart + i * 55;
-      var ghost = CONFIG.GT[r.ghostType];
-      ctx.fillStyle = ghost.color;
-      ctx.fillRect(cx - 8, 270, 16, 12);
-      // 闪光
-      ctx.globalAlpha = 0.4 + M.sin(t * 2.5 + i) * 0.4;
+      var r = successes[i], cx = scStart+i*55;
+      ctx.fillStyle = CONFIG.GT[r.ghostType].color;
+      ctx.fillRect(cx-8, 270, 16, 12);
+      ctx.globalAlpha = 0.4+M.sin(t*2.5+i)*0.4;
       ctx.fillStyle = CO.COPPER_SHINE;
-      ctx.fillRect(cx - 16, 258, 5, 5);
-      ctx.fillRect(cx + 14, 252, 5, 5);
+      ctx.fillRect(cx-16, 258, 5, 5);
+      ctx.fillRect(cx+14, 252, 5, 5);
       ctx.globalAlpha = 1;
-    }
-
-    // 继续
-    if (cp >= tw && se > tw / 10 + 0.5) {
-      ctx.font = FS.M + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#888';
-      ctx.fillText('点击继续', W/2, 400);
     }
   }
 
-  // ── 孟婆商店UI (独立覆盖, 同套牛drawShop) ──
-  function drawShopUI() {
+  // ── ★ 孟婆奶茶店UI (Bug#7: 缩小商品+放大看板娘) ──
+  function drawShopUI(t) {
     var teas = CONFIG.MILK_TEA;
     var coins = State.get('coins');
+    var scrollY = ZhongKui.getShopScrollY();
 
-    // 半透明遮罩 (同套牛)
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = 0.92;
     ctx.fillStyle = CO.BLACK;
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
 
-    // 标题栏
+    // ── 招牌 ──
     ctx.fillStyle = CO.DARK;
-    ctx.fillRect(10, 20, W - 20, 30);
-    ctx.fillStyle = CO.CHAIN;
-    ctx.fillRect(10, 52, W - 20, 2);
-    ctx.font = 'bold ' + FS.L + 'px monospace';
+    ctx.fillRect(15, 6, W-30, 30);
+    ctx.strokeStyle = CO.COPPER_SHINE;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(16, 7, W-32, 28);
+    ctx.font = 'bold '+FS.L+'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.COPPER_SHINE;
-    ctx.fillText('孟婆奶茶', W/2, 26);
+    ctx.fillText('孟婆奶茶', W/2, 28);
 
-    // 双列列表
-    var colW = 145, rowH = 50;
-    var startY = 60;
-    var leftX = 8, rightX = W / 2 + 5;
+    // ── 孟婆看板娘(大区域, Bug#7) ──
+    var mpY = 82;
+    // 头
+    ctx.fillStyle = CO.BONE;
+    ctx.beginPath(); ctx.arc(W/2, mpY, 22, 0, M.PI*2); ctx.fill();
+    // 头发
+    ctx.fillStyle = '#555';
+    ctx.fillRect(W/2-22, mpY-22, 44, 14);
+    // 眼
+    ctx.fillStyle = '#333';
+    ctx.fillRect(W/2-10, mpY-4, 5, 5);
+    ctx.fillRect(W/2+5, mpY-4, 5, 5);
+    // 嘴
+    ctx.fillStyle = CO.LANTERN;
+    ctx.fillRect(W/2-4, mpY+8, 8, 3);
+    // 身
+    ctx.strokeStyle = CO.BONE; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(W/2, mpY+22); ctx.lineTo(W/2, mpY+70); ctx.stroke();
+    // 手臂
+    ctx.beginPath();
+    ctx.moveTo(W/2-24, mpY+48); ctx.lineTo(W/2, mpY+36); ctx.lineTo(W/2+24, mpY+48);
+    ctx.stroke();
+    // 裙摆
+    ctx.fillStyle = CO.BONE;
+    ctx.beginPath();
+    ctx.moveTo(W/2-30, mpY+95); ctx.lineTo(W/2, mpY+70); ctx.lineTo(W/2+30, mpY+95);
+    ctx.fill();
+
+    // 对话气泡
+    var line = State.get('mengpoLine');
+    var lineTimer = State.get('mengpoLineTimer');
+    if (line && lineTimer > 0) {
+      ctx.fillStyle = 'rgba(13,13,26,0.9)';
+      ctx.fillRect(W/2-95, mpY-42, 190, 24);
+      ctx.strokeStyle = CO.CHAIN_GLOW; ctx.lineWidth = 1;
+      ctx.strokeRect(W/2-95, mpY-42, 190, 24);
+      ctx.font = FS.S+'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = CO.BONE;
+      ctx.fillText(line, W/2, mpY-25);
+    }
+
+    // ── 柜台 ──
+    var counterY = 186;
+    ctx.fillStyle = CO.BONE;
+    ctx.fillRect(10, counterY, W-20, 2);
+
+    // ── 商品列表(Bug#7: 缩小行高26px, 可滚动) ──
+    var productStartY = 196;
+    var rowH = 26;
+    var visibleTop = productStartY;
+    var visibleBot = H - 6;
+    var maxScroll = M.max(0, teas.length*rowH + 40 - (visibleBot - visibleTop));
+    scrollY = M.max(0, M.min(scrollY, maxScroll));
+    ZhongKui.setShopScrollY(scrollY);
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, visibleTop, W, visibleBot - visibleTop); ctx.clip();
 
     for (var i = 0; i < teas.length; i++) {
       var tea = teas[i];
-      var col = i < 5 ? 0 : 1;
-      var row = i < 5 ? i : i - 5;
-      var tx = col === 0 ? leftX : rightX;
-      var ty = startY + row * rowH;
+      var ry = productStartY + i*rowH - scrollY;
+      if (ry + rowH < visibleTop || ry > visibleBot) continue;
       var canBuy = coins >= tea.price;
 
-      ctx.fillStyle = canBuy ? CO.DARK : '#0a0a0a';
-      ctx.fillRect(tx, ty, colW - 4, rowH - 4);
-      // 类型指示条
-      ctx.fillStyle = tea.type === 'red' ? '#CC3333' : tea.type === 'green' ? '#33CC33' : CO.COPPER_SHINE;
-      ctx.fillRect(tx, ty, 2, rowH - 4);
+      ctx.fillStyle = canBuy ? CO.PANEL : '#0a0a0a';
+      ctx.fillRect(8, ry, W-16, rowH-2);
 
+      // 类型色条
+      ctx.fillStyle = tea.type==='red'?'#CC3333':tea.type==='green'?'#33CC33':CO.COPPER_SHINE;
+      ctx.fillRect(8, ry, 2, rowH-2);
+
+      // Bug#3: 模糊化描述
       ctx.textAlign = 'left';
-      ctx.font = FS.S + 'px monospace';
+      ctx.font = FS.S+'px monospace';
       ctx.fillStyle = canBuy ? CO.BONE : '#666';
-      ctx.fillText(tea.name, tx + 6, ty + 15);
-
-      var effect = '';
-      if (tea.type === 'red') effect = '+' + (tea.catchBonus * 100).toFixed(0) + '% ' + tea.duration + '局';
-      else if (tea.type === 'green') effect = '赔+' + tea.oddsBonus + ' ' + tea.duration + '局';
-      else if (tea.type === 'special_catch') effect = '锁定 ' + tea.duration + '局';
-      else if (tea.type === 'special_super') effect = 'x10 ' + tea.duration + '局';
-      ctx.fillStyle = canBuy ? '#AAA' : '#444';
-      ctx.fillText(effect, tx + 6, ty + 30);
+      ctx.fillText(tea.name + ' ' + ZhongKui.getEffectDesc(tea), 14, ry + 11);
 
       ctx.textAlign = 'right';
       ctx.fillStyle = canBuy ? CO.COPPER : '#555';
-      ctx.fillText(tea.price + '币', tx + colW - 10, ty + 30);
+      ctx.fillText(tea.price+'币', W-14, ry + 11);
     }
 
     // 请孟婆喝一杯
-    var treatY = startY + 5 * rowH + 5;
-    var canTreat = coins >= CONFIG.MENGPO_TREAT_PRICE;
-    ctx.fillStyle = canTreat ? 'rgba(139,0,0,0.4)' : '#0a0a0a';
-    ctx.fillRect(W / 2 - 150, treatY, 300, 36);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = canTreat ? CO.LANTERN : '#666';
-    ctx.font = FS.S + 'px monospace';
-    ctx.fillText('请孟婆喝一杯 (' + CONFIG.MENGPO_TREAT_PRICE + '币)', W/2, treatY + 22);
+    var treatY = productStartY + teas.length*rowH + 4 - scrollY;
+    if (treatY < visibleBot) {
+      var canTreat = coins >= CONFIG.MENGPO_TREAT_PRICE;
+      ctx.fillStyle = canTreat ? 'rgba(139,0,0,0.4)' : '#0a0a0a';
+      ctx.fillRect(8, treatY, W-16, 24);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = canTreat ? CO.LANTERN : '#666';
+      ctx.font = FS.S+'px monospace';
+      ctx.fillText('请孟婆喝一杯 ('+CONFIG.MENGPO_TREAT_PRICE+'币)', W/2, treatY+16);
+    }
+    ctx.restore();
 
-    // 关闭提示
-    ctx.globalAlpha = 0.5 + M.sin(totalTime * 3) * 0.3;
-    ctx.fillStyle = '#888';
-    ctx.fillText('点击空白处关闭', W/2, H - 30);
-    ctx.globalAlpha = 1;
+    // 滚动条
+    if (maxScroll > 0) {
+      var barH = M.max(16, (visibleBot-visibleTop)*(visibleBot-visibleTop)/(teas.length*rowH+40));
+      var barY = visibleTop + scrollY/maxScroll*(visibleBot-visibleTop-barH);
+      ctx.fillStyle = 'rgba(255,215,0,0.25)';
+      ctx.fillRect(W-5, barY, 3, barH);
+    }
   }
 
-  // ── 存档 ──
+  // ── Bug#2: Cookie存档 ──
   function saveGame() {
     try {
       var data = {
-        coins: State.get('coins'),
-        favor: State.get('favor'),
-        buffs: State.get('buffs'),
-        roiHistory: State.get('roiHistory')
+        coins: State.get('coins'), favor: State.get('favor'),
+        buffs: State.get('buffs'), roiHistory: State.get('roiHistory'),
+        sfxMuted: Audio.isSfxMuted(), bgmMuted: Audio.isBgmMuted(), v: 2
       };
-      localStorage.setItem('zhongkui_save', JSON.stringify(data));
+      document.cookie = 'zhongkui_save=' + encodeURIComponent(JSON.stringify(data)) +
+        ';max-age=31536000;path=/;SameSite=Lax';
     } catch(e) {}
   }
-
   function loadSave() {
     try {
-      var raw = localStorage.getItem('zhongkui_save');
-      if (!raw) {
-        State.set('coins', CONFIG.START_COINS);
-        return;
-      }
-      var data = JSON.parse(raw);
+      var match = document.cookie.match(/zhongkui_save=([^;]+)/);
+      if (!match) { State.set('coins', CONFIG.START_COINS); return; }
+      var data = JSON.parse(decodeURIComponent(match[1]));
       if (typeof data.coins === 'number') State.set('coins', data.coins);
       if (data.favor) State.set('favor', data.favor);
       if (data.buffs) State.set('buffs', data.buffs);
       if (data.roiHistory) State.set('roiHistory', data.roiHistory);
-    } catch(e) {
-      State.set('coins', CONFIG.START_COINS);
-    }
+      if (data.sfxMuted) Audio.setSfxMuted(true);
+      if (data.bgmMuted) Audio.setBgmMuted(true);
+    } catch(e) { State.set('coins', CONFIG.START_COINS); }
   }
 
-  // ── 启动 ──
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() { init(); requestAnimationFrame(loop); });
-  } else {
-    init();
-    requestAnimationFrame(loop);
-  }
+  } else { init(); requestAnimationFrame(loop); }
 
-  // ── 暴露给ZhongKui模块用的方法 ──
-  window._GameAPI = {
-    doHit: doHit,
-    doSettle: doSettle,
+  window._GameAPI = { doSettle: doSettle, doLasso: doLasso,
+    resetSave: function() {
+      document.cookie = 'zhongkui_save=;max-age=0;path=/';
+      State.set('coins', CONFIG.START_COINS);
+      State.set('favor', {level:1,exp:0});
+      State.set('buffs', {red:null,green:null,special_catch:null,special_super:null});
+      State.set('roiHistory', []);
+      Renderer.spawnFloatingText(W/2, 200, '存档已重置', CO.COPPER_SHINE);
+    }
   };
 })();
