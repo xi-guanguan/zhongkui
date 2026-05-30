@@ -1,16 +1,86 @@
-/* 黑笑话：钟馗 — 极简样式 (320×480) */
+/* 钟馗：冥界抓鬼 — 320×480竖屏适配 */
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#000;
-  overscroll-behavior:none;-webkit-user-select:none;user-select:none;
-  touch-action:none}
-#safe-wrapper{width:100%;height:100%;display:flex;justify-content:center;align-items:center}
-#game-container{position:relative;width:320px;height:480px}
-#game-frame{position:relative;width:100%;height:100%}
-#gc{display:block;width:100%;height:100%;image-rendering:pixelated}
-#touch-layer{position:absolute;top:0;left:0;width:100%;height:100%;z-index:10}
-@media (orientation:portrait){
-  #game-container{width:min(100vw,48vh);height:min(100vh,150vw)}
+html,body{
+  width:100vw;height:100dvh;overflow:hidden;
+  background:#0a0a14;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;
+  -webkit-user-select:none;
+  display:flex;flex-direction:column;
+  overscroll-behavior:none;
 }
-@media (orientation:landscape){
-  #game-container{width:min(100vh,48vw);height:min(100vw,150vh)}
+
+/* 安全包装 */
+#safe-wrapper{
+  flex:1 1 0;min-height:0;
+  display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);
+}
+
+/* 游戏容器 */
+#game-container{
+  flex:1 1 0;min-height:0;
+  display:flex;justify-content:center;align-items:center;
+  overflow:hidden;padding:6px;background:#0a0a14;
+}
+
+/* 街机框体 */
+#game-frame{
+  position:relative;
+  aspect-ratio:320/480;
+  width:100%;height:auto;
+  border:4px solid #1a1a2e;
+  background:#0d0d18;
+  box-shadow:inset 0 0 30px rgba(255,215,0,.06),
+    0 0 0 3px #111,0 0 0 7px #1a1a2e,
+    0 0 0 9px #0d0d18,0 4px 24px rgba(0,0,0,.5);
+}
+@media(min-aspect-ratio:2/3){
+  #game-frame{width:auto;height:100%}
+}
+
+canvas{
+  display:block;width:100%;height:100%;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+}
+
+/* 触摸层 */
+#touch-layer{
+  position:absolute;top:0;left:0;right:0;bottom:0;z-index:10;
+  pointer-events:none;
+}
+#touch-layer.active{pointer-events:auto;cursor:pointer}
+
+/* 底部操作栏 (同套牛) */
+#bottom-bar{
+  flex-shrink:0;
+  min-height:64px;
+  display:flex;justify-content:center;align-items:center;
+  gap:12px;padding:10px 16px;
+  padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  background:#0a0a0a;
+  border-top:3px solid #1a1a2e;
+}
+.btn{
+  flex:1;max-width:180px;
+  min-height:56px;
+  background:#FFB800;
+  color:#1A1A2E;border:3px solid #E6A000;
+  font-family:'Courier New',monospace;font-size:18px;font-weight:bold;
+  cursor:pointer;text-align:center;letter-spacing:1px;
+  padding:0 20px;border-radius:0;
+  box-shadow:0 4px 0 #996600,0 6px 8px rgba(0,0,0,.4);
+  transition:transform .06s,box-shadow .06s;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;top:0;
+}
+.btn:active{
+  transform:translateY(3px);
+  box-shadow:0 1px 0 #996600,0 2px 4px rgba(0,0,0,.4);
+}
+.btn:disabled{
+  background:#444;
+  border-color:#222;color:#555;
+  box-shadow:0 4px 0 #1a1a1a,0 6px 8px rgba(0,0,0,.4);
+  pointer-events:none;
 }

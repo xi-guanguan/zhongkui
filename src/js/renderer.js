@@ -21,11 +21,10 @@ var Renderer = (function() {
     ctx.fillRect(0, 0, W, H);
   }
 
-  // ── HUD顶栏 ──
+  // ── HUD顶栏 (同套牛drawHUD) ──
   function drawHUD() {
     var coins = State.get('coins');
     var stage = State.get('stage');
-    var ghost = State.currentGhost();
     var favor = State.get('favor');
 
     // 背景
@@ -36,73 +35,52 @@ var Renderer = (function() {
     ctx.font = FS.M + 'px monospace';
     ctx.textAlign = 'left';
     ctx.fillStyle = CO.COPPER;
-    ctx.fillText('\u2B50 ' + coins, 10, 30);
+    ctx.fillText('COINS ' + coins, 10, 20);
 
-    // 波次/鬼名
+    // 阶段名
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.BONE;
-    if (stage === 'ROUND' || stage === 'PAT' || stage === 'RESULT') {
-      ctx.fillText(ghost.name + ' (' + ghost.catchP*100 + '%)', W/2, 30);
-    } else {
-      ctx.fillText(stage, W/2, 30);
-    }
+    var stageLabel = stage;
+    if (stage === 'RUNNING') {
+      var sub = State.get('runningSubPhase');
+      stageLabel = sub === 'OBSERVE' ? '观察中' : '倒计时';
+    } else if (stage === 'HITTING') stageLabel = '拍打!';
+    else if (stage === 'RESULT') stageLabel = '判定';
+    else if (stage === 'SETTLE') stageLabel = '结算';
+    else if (stage === 'IDLE') stageLabel = '待机';
+    ctx.fillText(stageLabel, W / 2, 20);
 
     // 好感等级
     ctx.textAlign = 'right';
     ctx.fillStyle = CO.LANTERN;
-    ctx.fillText('Lv.' + favor.level, W - 10, 30);
+    ctx.fillText('Lv.' + favor.level, W - 10, 20);
 
     // buff图标
     var buffs = State.get('buffs');
     var bx = W - 50;
     if (buffs.red) {
       ctx.fillStyle = '#CC3333';
-      ctx.fillRect(bx, 10, 14, 14);
-      bx -= 18;
+      ctx.fillRect(bx, 4, 10, 10);
+      bx -= 14;
     }
     if (buffs.green) {
       ctx.fillStyle = '#33CC33';
-      ctx.fillRect(bx, 10, 14, 14);
-      bx -= 18;
+      ctx.fillRect(bx, 4, 10, 10);
+      bx -= 14;
     }
-  }
-
-  // ── 底栏 ──
-  function drawBottomBar() {
-    var stage = State.get('stage');
-    ctx.fillStyle = 'rgba(13,13,26,0.9)';
-    ctx.fillRect(0, LY.BOTTOM_Y, W, LY.BOTTOM_H);
-
-    ctx.font = FS.M + 'px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = CO.BONE;
-
-    if (stage === 'MENU') {
-      ctx.fillText('[ 开始游戏 ]', W/2, LY.BOTTOM_Y + 45);
-    } else if (stage === 'RESULT') {
-      ctx.fillText('[ 继续 ]', W/2, LY.BOTTOM_Y + 45);
-    } else if (stage === 'SHOP') {
-      ctx.fillText('[ 打工 ]', W/2 - 60, LY.BOTTOM_Y + 45);
-      ctx.fillText('[ 返回 ]', W/2 + 60, LY.BOTTOM_Y + 45);
-    } else if (stage === 'MINING') {
-      // 打工HUD由mining模块绘制
+    if (buffs.special_catch) {
+      ctx.fillStyle = CO.COPPER_SHINE;
+      ctx.fillRect(bx, 4, 10, 10);
+      bx -= 14;
     }
-  }
-
-  // ── 投币选择器 ──
-  function drawCoinSelector() {
-    var bet = State.get('betAmount');
-    var y = LY.BOTTOM_Y + 10;
-    ctx.font = FS.S + 'px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = CO.BONE;
-    ctx.fillText('投币:', 40, y + 12);
-    for (var i = 1; i <= 5; i++) {
-      ctx.fillStyle = (i <= bet) ? CO.COPPER : '#333';
-      ctx.fillRect(65 + (i-1)*48, y, 42, 24);
-      ctx.fillStyle = (i <= bet) ? CO.VOID : '#666';
-      ctx.fillText(i, 86 + (i-1)*48, y + 17);
+    if (buffs.special_super) {
+      ctx.fillStyle = '#FF8800';
+      ctx.fillRect(bx, 4, 10, 10);
     }
+
+    // HUD底边线
+    ctx.fillStyle = CO.CHAIN;
+    ctx.fillRect(0, LY.HUD_H, W, 1);
   }
 
   // ── 孟婆对话气泡 ──
@@ -116,14 +94,14 @@ var Renderer = (function() {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = 'rgba(13,13,26,0.85)';
     var bw = 260, bh = 40;
-    var bx = (W - bw)/2, by = 120;
+    var bx = (W - bw) / 2, by = 120;
     ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = CO.CHAIN_GLOW;
     ctx.strokeRect(bx, by, bw, bh);
     ctx.font = FS.S + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.BONE;
-    ctx.fillText(line, W/2, by + 25);
+    ctx.fillText(line, W / 2, by + 25);
     ctx.restore();
   }
 
@@ -133,8 +111,8 @@ var Renderer = (function() {
       var angle = Math.random() * Math.PI * 2;
       var speed = 30 + Math.random() * 60;
       particles.push({
-        x:x, y:y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed,
-        life:1, color:color, size:2+Math.random()*3
+        x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 1, color: color, size: 2 + Math.random() * 3
       });
     }
   }
@@ -154,7 +132,7 @@ var Renderer = (function() {
       var p = particles[i];
       ctx.globalAlpha = p.life;
       ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
     }
     ctx.globalAlpha = 1;
   }
@@ -162,7 +140,7 @@ var Renderer = (function() {
   // ── 飘字 ──
   function spawnFloatingText(x, y, text, color) {
     if (floatingTexts.length >= 10) floatingTexts.shift();
-    floatingTexts.push({ x:x, y:y, text:text, color:color, life:1.5 });
+    floatingTexts.push({ x: x, y: y, text: text, color: color, life: 1.5 });
   }
 
   function updateFloatingTexts(dt) {
@@ -189,45 +167,29 @@ var Renderer = (function() {
   // ── 震屏 ──
   function applyShake() {
     var s = State.get('shake');
-    if (s.t > 0) {
-      ctx.translate(s.x, s.y);
-    }
+    if (s.t > 0) ctx.translate(s.x, s.y);
   }
 
   function triggerShake(intensity) {
-    State.set('shake', { x:(Math.random()-0.5)*intensity, y:(Math.random()-0.5)*intensity, t:0.15 });
+    State.set('shake', { x: (Math.random() - 0.5) * intensity, y: (Math.random() - 0.5) * intensity, t: 0.15 });
   }
 
   function updateShake(dt) {
     var s = State.get('shake');
     if (s.t > 0) {
       s.t -= dt;
-      s.x = (Math.random()-0.5) * s.t * 40;
-      s.y = (Math.random()-0.5) * s.t * 40;
+      s.x = (Math.random() - 0.5) * s.t * 40;
+      s.y = (Math.random() - 0.5) * s.t * 40;
       if (s.t <= 0) { s.x = 0; s.y = 0; s.t = 0; }
     }
   }
 
-  // ── 色块占位渲染 ──
-  function drawPlaceholder(x, y, w, h, color, label) {
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, w, h);
-    if (label) {
-      ctx.font = FS.S + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#FFF';
-      ctx.fillText(label, x + w/2, y + h/2 + 4);
-    }
-  }
-
   return {
-    init:init, clear:clear, drawHUD:drawHUD, drawBottomBar:drawBottomBar,
-    drawCoinSelector:drawCoinSelector, drawMengpoLine:drawMengpoLine,
-    spawnParticles:spawnParticles, updateParticles:updateParticles,
-    drawParticles:drawParticles, spawnFloatingText:spawnFloatingText,
-    updateFloatingTexts:updateFloatingTexts, drawFloatingTexts:drawFloatingTexts,
-    applyShake:applyShake, triggerShake:triggerShake, updateShake:updateShake,
-    drawPlaceholder:drawPlaceholder,
+    init: init, clear: clear, drawHUD: drawHUD, drawMengpoLine: drawMengpoLine,
+    spawnParticles: spawnParticles, updateParticles: updateParticles,
+    drawParticles: drawParticles, spawnFloatingText: spawnFloatingText,
+    updateFloatingTexts: updateFloatingTexts, drawFloatingTexts: drawFloatingTexts,
+    applyShake: applyShake, triggerShake: triggerShake, updateShake: updateShake,
     getCtx: function() { return ctx; }
   };
 })();
