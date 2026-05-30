@@ -4,6 +4,7 @@
  * 暴露：Audio (全局) */
 
 var Audio = (function() {
+  var M = Math;
   var _ac = null;
   var _sfxMuted = false;
   var _bgmMuted = false;
