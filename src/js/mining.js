@@ -150,93 +150,188 @@ var Mining = (function() {
   function draw(ctx, t) {
     if (!active) return;
     var M = Math;
+    var CO = CONFIG.CO;
 
-    // 背景
-    ctx.fillStyle = '#0D0D1A';
+    // ── 1. 阴河背景 ──
+    var waterGrad = ctx.createLinearGradient(0, 0, 0, H);
+    waterGrad.addColorStop(0, '#0D1A1A');
+    waterGrad.addColorStop(0.4, '#0D0D1A');
+    waterGrad.addColorStop(1, '#1A0D1A');
+    ctx.fillStyle = waterGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // 钟馗/船(顶部)
-    ctx.fillStyle = CONFIG.CO.CHAIN;
-    ctx.fillRect(W/2 - 30, 40, 60, 20);
-    ctx.fillStyle = CONFIG.CO.BONE;
-    ctx.fillRect(W/2 - 3, 30, 6, 14);
-
-    // ★ 钩子方向指示(IDLE时也可见)
-    var showLength = hookLength;
-    if (hookState === HOOK.IDLE) showLength = 50; // IDLE时显示50px的摆动指示线
-
-    hookTipX = hookX + Math.sin(hookAngle) * showLength;
-    hookTipY = hookY + Math.cos(hookAngle) * showLength;
-
-    // IDLE时额外画摆动范围弧线(先画弧再画线, 让线覆盖在弧上)
-    if (hookState === HOOK.IDLE) {
-      ctx.strokeStyle = 'rgba(255,215,0,0.3)';
-      ctx.lineWidth = 2;
+    // ── 2. 水面波纹(多层视差) ──
+    ctx.strokeStyle = 'rgba(57,255,20,0.08)';
+    ctx.lineWidth = 1;
+    for (var wli = 0; wli < 5; wli++) {
+      var wly = 100 + wli * 70;
+      var wlSpeed = 0.5 + wli * 0.3;
+      var wlAmp = 3 + wli;
       ctx.beginPath();
-      ctx.arc(hookX, hookY, 50, M.PI/2 - MINING_CFG.hookSwing, M.PI/2 + MINING_CFG.hookSwing);
+      for (var wx = 0; wx <= W; wx += 8) {
+        var wly2 = wly + M.sin(wx * 0.05 + t * wlSpeed + wli) * wlAmp;
+        if (wx === 0) ctx.moveTo(wx, wly2);
+        else ctx.lineTo(wx, wly2);
+      }
       ctx.stroke();
-      // 原点圆
-      ctx.fillStyle = CONFIG.CO.COPPER_SHINE;
-      ctx.beginPath();
-      ctx.arc(hookX, hookY, 4, 0, M.PI*2);
-      ctx.fill();
     }
 
-    // 绳/指示线
-    ctx.strokeStyle = hookState === HOOK.IDLE ? CONFIG.CO.COPPER_SHINE : CONFIG.CO.CHAIN;
-    ctx.lineWidth = hookState === HOOK.IDLE ? 3 : 2;
+    // ── 3. 水底古币(远景装饰, 模糊小点) ──
+    ctx.globalAlpha = 0.15;
+    for (var di = 0; di < 8; di++) {
+      var dcx = (di * 47 + t * 3) % (W + 20) - 10;
+      var dcy = 200 + di * 35;
+      ctx.fillStyle = CO.COPPER;
+      ctx.beginPath();
+      ctx.arc(dcx, dcy, 3, 0, M.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = CO.VOID;
+      ctx.fillRect(dcx - 1, dcy - 1, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // ── 4. 木船(像素风) ──
+    var boatY = 55;
+    // 船体
+    ctx.fillStyle = '#4A3728';
+    ctx.fillRect(W/2 - 40, boatY, 80, 16);
+    // 船头船尾翘起
     ctx.beginPath();
-    ctx.moveTo(hookX, hookY);
+    ctx.moveTo(W/2 - 40, boatY);
+    ctx.lineTo(W/2 - 48, boatY - 6);
+    ctx.lineTo(W/2 - 40, boatY + 4);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(W/2 + 40, boatY);
+    ctx.lineTo(W/2 + 48, boatY - 6);
+    ctx.lineTo(W/2 + 40, boatY + 4);
+    ctx.fill();
+    // 船舷高光
+    ctx.fillStyle = '#6B5344';
+    ctx.fillRect(W/2 - 38, boatY + 2, 76, 3);
+    // 船舱阴影
+    ctx.fillStyle = '#2A1F16';
+    ctx.fillRect(W/2 - 30, boatY - 6, 60, 8);
+
+    // ── 5. 船上钟馗(简化像素8x14) ──
+    var zkX = W/2, zkY = boatY - 14;
+    // 身体(红袍)
+    ctx.fillStyle = CO.BLOOD;
+    ctx.fillRect(zkX - 4, zkY, 8, 10);
+    // 头
+    ctx.fillStyle = CO.BONE;
+    ctx.fillRect(zkX - 3, zkY - 6, 6, 6);
+    // 帽子
+    ctx.fillStyle = CO.VOID;
+    ctx.fillRect(zkX - 4, zkY - 9, 8, 3);
+    ctx.fillStyle = CO.COPPER;
+    ctx.fillRect(zkX - 1, zkY - 11, 2, 2);
+    // 眼
+    ctx.fillStyle = CO.VOID;
+    ctx.fillRect(zkX - 2, zkY - 4, 1, 1);
+    ctx.fillRect(zkX + 1, zkY - 4, 1, 1);
+    // 手持钓竿
+    ctx.strokeStyle = '#8B6914';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(zkX + 4, zkY + 4);
+    ctx.lineTo(zkX + 10, zkY - 2);
+    ctx.stroke();
+    // 竿头(绳起点)
+    var ropeOriginX = zkX + 10, ropeOriginY = zkY - 2;
+
+    // ── 6. 钩子方向指示+绳 ──
+    var showLength = hookLength;
+    if (hookState === HOOK.IDLE) showLength = 50;
+
+    hookTipX = ropeOriginX + M.sin(hookAngle) * showLength;
+    hookTipY = ropeOriginY + M.cos(hookAngle) * showLength;
+
+    // IDLE时画摆动弧线
+    if (hookState === HOOK.IDLE) {
+      ctx.strokeStyle = 'rgba(255,215,0,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(ropeOriginX, ropeOriginY, 50, M.PI/2 - MINING_CFG.hookSwing, M.PI/2 + MINING_CFG.hookSwing);
+      ctx.stroke();
+    }
+
+    // 绳(链节纹理)
+    ctx.strokeStyle = hookState === HOOK.IDLE ? CO.COPPER_SHINE : CO.CHAIN;
+    ctx.lineWidth = hookState === HOOK.IDLE ? 2 : 1.5;
+    ctx.beginPath();
+    ctx.moveTo(ropeOriginX, ropeOriginY);
     ctx.lineTo(hookTipX, hookTipY);
     ctx.stroke();
 
-    // ★ 钩头(箭头形状, 清晰显示方向)
-    ctx.fillStyle = hookState === HOOK.IDLE ? CONFIG.CO.COPPER_SHINE : CONFIG.CO.CHAIN_GLOW;
-    // 箭头: 沿钩方向的三角
-    var dx = hookTipX - hookX, dy = hookTipY - hookY;
+    // 钩头(古铜钱形状)
+    ctx.fillStyle = hookState === HOOK.IDLE ? CO.COPPER_SHINE : CO.CHAIN_GLOW;
+    var dx = hookTipX - ropeOriginX, dy = hookTipY - ropeOriginY;
     var len = M.sqrt(dx*dx + dy*dy);
     if (len > 0) {
       var nx = dx/len, ny = dy/len;
-      var px = -ny, py = nx; // 垂直方向
-      var arrowSize = hookState === HOOK.IDLE ? 12 : 6;
+      var arrowSize = hookState === HOOK.IDLE ? 10 : 6;
       ctx.beginPath();
       ctx.moveTo(hookTipX + nx*arrowSize, hookTipY + ny*arrowSize);
-      ctx.lineTo(hookTipX + px*arrowSize*0.6, hookTipY + py*arrowSize*0.6);
-      ctx.lineTo(hookTipX - px*arrowSize*0.6, hookTipY - py*arrowSize*0.6);
+      ctx.lineTo(hookTipX + (-ny)*arrowSize*0.5, hookTipY + nx*arrowSize*0.5);
+      ctx.lineTo(hookTipX - nx*arrowSize*0.3, hookTipY - ny*arrowSize*0.3);
+      ctx.lineTo(hookTipX - (-ny)*arrowSize*0.5, hookTipY - nx*arrowSize*0.5);
       ctx.closePath();
       ctx.fill();
     }
 
-    // 铜钱
+    // ── 7. 圆形古币 ──
     for (var i = 0; i < coins.length; i++) {
       var c = coins[i];
       if (c.grabbed && hookState === HOOK.RETRACTING_WITH) continue;
       ctx.save();
       ctx.translate(c.x, c.y);
       ctx.rotate(c.rotation);
-      ctx.fillStyle = CONFIG.CO.COPPER;
-      ctx.fillRect(-c.size/2, -c.size/2, c.size, c.size);
-      ctx.fillStyle = CONFIG.CO.VOID;
-      ctx.fillRect(-2, -2, 4, 4);
+      // 外圆
+      ctx.fillStyle = CO.COPPER;
+      ctx.beginPath();
+      ctx.arc(0, 0, c.size/2, 0, M.PI*2);
+      ctx.fill();
+      // 外圆边框
+      ctx.strokeStyle = '#A0522D';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // 内环
+      ctx.strokeStyle = '#8B6914';
+      ctx.beginPath();
+      ctx.arc(0, 0, c.size/2 - 2, 0, M.PI*2);
+      ctx.stroke();
+      // 方孔
+      ctx.fillStyle = CO.VOID;
+      ctx.fillRect(-c.size/5, -c.size/5, c.size/2.5, c.size/2.5);
+      // 文字(简化)
+      ctx.fillStyle = '#A0522D';
+      ctx.font = (c.size*0.4) + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.value === 3 ? '三' : '一', 0, c.size*0.15);
       ctx.restore();
     }
 
-    // HUD
+    // ── 8. 迷雾前景 ──
+    ctx.fillStyle = 'rgba(13,13,26,0.25)';
+    ctx.fillRect(0, H - 80, W, 80);
+
+    // ── 9. HUD ──
     ctx.font = CONFIG.FS.M + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillStyle = CONFIG.CO.BONE;
-    ctx.fillText('时间: ' + Math.ceil(timer) + 's', 10, 25);
+    ctx.fillStyle = CO.BONE;
+    ctx.fillText('时间: ' + M.ceil(timer) + 's', 10, 25);
     ctx.textAlign = 'right';
-    ctx.fillStyle = CONFIG.CO.COPPER;
-    ctx.fillText('已抓: ' + coinCount, W - 10, 25);
+    ctx.fillStyle = CO.COPPER_SHINE;
+    ctx.fillText('已捞: ' + coinCount, W - 10, 25);
 
-    // ★ 底部提示(IDLE时更醒目)
+    // ── 10. 底部提示 ──
     if (hookState === HOOK.IDLE) {
       ctx.globalAlpha = 0.5 + M.sin(t * 4) * 0.4;
-      ctx.font = CONFIG.FS.L + 'px monospace';
+      ctx.font = CONFIG.FS.M + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillStyle = CONFIG.CO.COPPER_SHINE;
-      ctx.fillText('点击射钩!', W/2, H - 20);
+      ctx.fillStyle = CO.COPPER_SHINE;
+      ctx.fillText('点击射钩捞币!', W/2, H - 20);
       ctx.globalAlpha = 1;
     }
   }

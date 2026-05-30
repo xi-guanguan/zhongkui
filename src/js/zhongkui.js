@@ -11,6 +11,7 @@ var ZhongKui = (function() {
   var coinMode = false;
   var settingsOpen = false;
   var shopScrollY = 0, shopDragging = false, shopDragStartY = 0, shopDragStartScroll = 0, shopDragMoved = false;
+  var shopSelectedTea = null; // V3: 当前选中的奶茶
   var btnSettings, btnAction, btnShop;
 
   function init() {
@@ -35,8 +36,14 @@ var ZhongKui = (function() {
         var stage = State.get('stage');
         var shopOpen = State.get('shopOpen');
 
+        // V3: 商店有选中茶时，主按钮变为"购买"
+        if (shopOpen && stage !== 'MINING' && shopSelectedTea) {
+          buySelectedTea();
+          return;
+        }
         if (shopOpen && stage !== 'MINING') {
           State.set('shopOpen', false);
+          shopSelectedTea = null;
           State.changeStage('MINING');
           Mining.start();
         } else if (stage === 'IDLE' && !shopOpen) {
@@ -65,14 +72,21 @@ var ZhongKui = (function() {
           addCoin();
         } else if (stage === 'MINING') {
           Mining.endMining(); // Bug#5: 返回回孟婆店
+        } else if (shopOpen && shopSelectedTea) {
+          // V3: 取消选中
+          shopSelectedTea = null;
+          State.set('mengpoLine', MengPo.getLine ? MengPo.getLine('enter') : '想喝点什么？');
+          State.set('mengpoLineTimer', 2.5);
         } else if (shopOpen) {
           // Bug#4: 返回时清除孟婆对话框
           State.set('shopOpen', false);
+          shopSelectedTea = null;
           State.set('mengpoLine', null);
           State.set('mengpoLineTimer', 0);
         } else if (stage === 'IDLE') {
           State.set('shopOpen', true);
           shopScrollY = 0;
+          shopSelectedTea = null;
           if (typeof MengPo !== 'undefined') {
             State.set('mengpoLine', MengPo.getLine('enter'));
             State.set('mengpoLineTimer', 2.5);
@@ -144,6 +158,10 @@ var ZhongKui = (function() {
     State.set('hitCount', 0);
     State.set('hitTimer', 0);
     State.set('stageTimer', 0);
+    // ★ 重置每局特效标志
+    State.set('_bigWinFired', false);
+    State.set('_lassoFlash', false);
+    State.set('_prevSettleCoins', 0);
     State.changeStage('RUNNING');
     Audio.play('coin');
     updateDOM();
@@ -216,21 +234,52 @@ var ZhongKui = (function() {
 
   function handleShopTap(tx, ty) {
     var teas = CONFIG.MILK_TEA;
-    var productStartY = 208;
-    var rowH = 26;
+    // V3: 分界线 counterY=280, 两列布局
+    var counterY = 280;
+    var listY = counterY + 14;
+    var itemH = 32;
+    var gap = 4;
+    var colW = (W - 16 - gap) / 2;
+    var itemsPerRow = 2;
     var clicked = false;
     for (var i = 0; i < teas.length; i++) {
-      var ry = productStartY + i * rowH - shopScrollY;
-      if (ry < 200 || ry > H) continue;
-      if (ty > ry && ty < ry + rowH && tx > 10 && tx < W - 10) {
-        buyTea(teas[i]); clicked = true; break;
+      var row = M.floor(i / itemsPerRow);
+      var col = i % itemsPerRow;
+      var rx = 8 + col * (colW + gap);
+      var ry = listY + row * (itemH + gap) - shopScrollY;
+      if (ry < listY || ry > H) continue;
+      if (ty > ry && ty < ry + itemH && tx > rx && tx < rx + colW) {
+        selectTea(teas[i]);
+        clicked = true; break;
       }
     }
-    var treatY = productStartY + teas.length * rowH + 4 - shopScrollY;
-    if (!clicked && ty > treatY && ty < treatY + 26 && tx > 10 && tx < W - 10) {
-      buyMengpoTreat(); clicked = true;
+    // 请孟婆喝一杯(最后一行, 全宽)
+    if (!clicked) {
+      var treatRow = M.ceil(teas.length / itemsPerRow);
+      var treatY = listY + treatRow * (itemH + gap) - shopScrollY;
+      if (ty > treatY && ty < treatY + itemH && tx > 8 && tx < W - 8) {
+        buyMengpoTreat(); clicked = true;
+      }
     }
     updateDOM();
+  }
+
+  // V3: 选中奶茶
+  function selectTea(tea) {
+    shopSelectedTea = tea;
+    // 孟婆介绍该茶
+    var desc = tea.name + ' — ' + getEffectDesc(tea) + ', ' + tea.duration + '局有效';
+    State.set('mengpoLine', desc);
+    State.set('mengpoLineTimer', 4);
+  }
+
+  // V3: 购买选中的茶
+  function buySelectedTea() {
+    if (!shopSelectedTea) return;
+    buyTea(shopSelectedTea);
+    shopSelectedTea = null;
+    State.set('mengpoLine', MengPo.getLine ? MengPo.getLine('buy') : '多谢惠顾~');
+    State.set('mengpoLineTimer', 2.5);
   }
 
   function buyTea(tea) {
@@ -311,8 +360,15 @@ var ZhongKui = (function() {
     var smFontSize = '14px';
 
     if (shopOpen && stage !== 'MINING') {
-      btnAction.textContent = '打工'; btnAction.disabled = false;
-      btnShop.textContent = '返回'; btnShop.style.fontSize = smFontSize; btnShop.disabled = false;
+      // V3: 有选中茶时按钮变为购买/取消
+      if (shopSelectedTea) {
+        var canBuy = State.get('coins') >= shopSelectedTea.price;
+        btnAction.textContent = '购买'; btnAction.disabled = !canBuy;
+        btnShop.textContent = '取消'; btnShop.style.fontSize = smFontSize; btnShop.disabled = false;
+      } else {
+        btnAction.textContent = '打工'; btnAction.disabled = false;
+        btnShop.textContent = '返回'; btnShop.style.fontSize = smFontSize; btnShop.disabled = false;
+      }
       btnSettings.disabled = false;
       return;
     }
@@ -366,66 +422,133 @@ var ZhongKui = (function() {
     var stage = State.get('stage');
     if (stage === 'MINING') return;
 
-    // ★ 像素钟馗: 红黑立绘 + 呼吸金光
+    // ★ 像素钟馗 V2: 16×32 精致像素立绘 + 呼吸金光
     var cx = M.floor(x), cy = M.floor(y);
     var breathY = M.floor(M.sin(t * 1.8) * 1.5);
+    var breathS = 1 + M.sin(t * 1.8) * 0.03;
+    var wingB = M.floor(M.sin(t * 2.5) * 1.5);
 
-    // 呼吸金光(如如之心: shadowBlur自己呼吸)
+    ctx.save();
+    ctx.translate(cx, cy + breathY);
+    ctx.scale(breathS, breathS);
+    ctx.translate(-cx, -(cy + breathY));
+
+    // 底座阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(cx - 8, cy + 16, 16, 3);
+
+    // 呼吸金光
     ctx.shadowColor = CO.COPPER_SHINE;
-    ctx.shadowBlur = 3 + M.sin(t * 1.8) * 2;
+    ctx.shadowBlur = 4 + M.sin(t * 2) * 3;
 
-    // 官帽(14×6, VOID黑 + 两翼3×2)
+    // L7: 帽翅
     ctx.fillStyle = CO.VOID;
-    ctx.fillRect(cx - 7, cy - 24 + breathY, 14, 6);
-    ctx.fillRect(cx - 10, cy - 24 + breathY, 3, 3);
-    ctx.fillRect(cx + 7, cy - 24 + breathY, 3, 3);
-    // 帽带(铜色)
+    ctx.fillRect(cx - 11 + wingB, cy - 26, 4, 3);
+    ctx.fillRect(cx + 7 + wingB, cy - 26, 4, 3);
     ctx.fillStyle = CO.COPPER;
-    ctx.fillRect(cx - 7, cy - 19 + breathY, 14, 2);
+    ctx.fillRect(cx - 10 + wingB, cy - 25, 2, 1);
+    ctx.fillRect(cx + 8 + wingB, cy - 25, 2, 1);
 
-    // 脸(10×8, BONE骨白)
-    ctx.fillStyle = CO.BONE;
-    ctx.fillRect(cx - 5, cy - 18 + breathY, 10, 8);
-    // 眼睛(2×2, VOID黑)
+    // L6: 官帽顶
     ctx.fillStyle = CO.VOID;
-    ctx.fillRect(cx - 4, cy - 15 + breathY, 2, 2);
-    ctx.fillRect(cx + 2, cy - 15 + breathY, 2, 2);
-    // 胡须(3条2px竖线, CHAIN灰)
-    ctx.fillStyle = CO.CHAIN;
-    ctx.fillRect(cx - 3, cy - 10 + breathY, 1, 3);
-    ctx.fillRect(cx, cy - 10 + breathY, 1, 3);
-    ctx.fillRect(cx + 3, cy - 10 + breathY, 1, 3);
-
-    // 躯干(12×16, BLOOD红袍)
-    ctx.fillStyle = CO.BLOOD;
-    ctx.fillRect(cx - 6, cy - 10 + breathY, 12, 16);
-    // 腰带(14×3, COPPER铜)
-    ctx.fillStyle = CO.COPPER;
-    ctx.fillRect(cx - 7, cy + 3 + breathY, 14, 3);
-    // 袍纹(2px装饰线)
+    ctx.fillRect(cx - 6, cy - 26, 12, 5);
     ctx.fillStyle = CO.COPPER_SHINE;
-    ctx.fillRect(cx - 1, cy - 8 + breathY, 2, 12);
+    ctx.fillRect(cx - 6, cy - 26, 12, 1);
+    ctx.fillRect(cx - 6, cy - 22, 1, 1);
+    ctx.fillRect(cx + 5, cy - 22, 1, 1);
+    ctx.fillStyle = CO.COPPER_SHINE;
+    ctx.fillRect(cx - 1, cy - 28, 2, 2);
+
+    // L5: 额头+眉毛
+    ctx.fillStyle = CO.BONE;
+    ctx.fillRect(cx - 5, cy - 21, 10, 3);
+    ctx.fillStyle = CO.CHAIN;
+    ctx.fillRect(cx - 4, cy - 20, 3, 1);
+    ctx.fillRect(cx + 1, cy - 20, 3, 1);
 
     ctx.shadowBlur = 0;
 
-    // 腿(2条4×8, VOID黑)
+    // L4: 脸 + 丹凤眼
+    ctx.fillStyle = CO.BONE;
+    ctx.fillRect(cx - 5, cy - 18, 10, 8);
     ctx.fillStyle = CO.VOID;
-    ctx.fillRect(cx - 5, cy + 6 + breathY, 4, 8);
-    ctx.fillRect(cx + 1, cy + 6 + breathY, 4, 8);
-    // 靴(稍宽, DUSK暗紫)
-    ctx.fillStyle = CO.DUSK;
-    ctx.fillRect(cx - 6, cy + 13 + breathY, 5, 3);
-    ctx.fillRect(cx + 1, cy + 13 + breathY, 5, 3);
+    ctx.fillRect(cx - 4, cy - 15, 2, 2);
+    ctx.fillRect(cx - 3, cy - 16, 2, 1);
+    ctx.fillRect(cx + 2, cy - 15, 2, 2);
+    ctx.fillRect(cx + 3, cy - 16, 2, 1);
+    ctx.fillStyle = CO.WHITE;
+    ctx.fillRect(cx - 3, cy - 15, 1, 1);
+    ctx.fillRect(cx + 3, cy - 15, 1, 1);
 
-    // 链环(待机投币数或回合链数)
+    // L3: 胡须
+    ctx.fillStyle = CO.CHAIN;
+    ctx.fillRect(cx - 3, cy - 10, 1, 4);
+    ctx.fillRect(cx - 1, cy - 10, 1, 5);
+    ctx.fillRect(cx + 1, cy - 10, 1, 5);
+    ctx.fillRect(cx + 3, cy - 10, 1, 4);
+    ctx.fillRect(cx - 4, cy - 7, 1, 2);
+    ctx.fillRect(cx + 4, cy - 7, 1, 2);
+
+    // L2: 红袍 + 云纹
+    ctx.fillStyle = CO.BLOOD;
+    ctx.fillRect(cx - 7, cy - 10, 14, 18);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(cx - 5, cy - 6, 3, 2);
+    ctx.fillRect(cx + 2, cy - 3, 3, 2);
+    ctx.fillRect(cx - 4, cy + 1, 2, 3);
+    ctx.fillRect(cx + 1, cy + 3, 3, 2);
+    ctx.fillStyle = CO.COPPER_SHINE;
+    ctx.fillRect(cx - 7, cy + 7, 14, 1);
+
+    // L1: 腰带 + 玉佩
+    ctx.fillStyle = CO.COPPER;
+    ctx.fillRect(cx - 8, cy + 2, 16, 4);
+    ctx.fillStyle = CO.COPPER_SHINE;
+    ctx.fillRect(cx - 8, cy + 2, 16, 1);
+    ctx.fillStyle = '#21BDAE';
+    ctx.fillRect(cx - 1, cy + 4, 2, 3);
+    ctx.fillStyle = CO.WHITE;
+    ctx.fillRect(cx - 1, cy + 4, 1, 1);
+
+    // L0: 腿 + 靴
+    ctx.fillStyle = CO.VOID;
+    ctx.fillRect(cx - 5, cy + 8, 4, 10);
+    ctx.fillRect(cx + 1, cy + 8, 4, 10);
+    ctx.fillStyle = CO.DUSK;
+    ctx.fillRect(cx - 6, cy + 15, 6, 3);
+    ctx.fillRect(cx + 0, cy + 15, 6, 3);
+    ctx.fillStyle = '#1A1A2E';
+    ctx.fillRect(cx - 6, cy + 17, 6, 1);
+    ctx.fillRect(cx + 0, cy + 17, 6, 1);
+
+    ctx.restore();
+
+    // 链环: 移到头顶+牛仔式晃荡旋转
     var chainCount = 0;
     if (stage === 'IDLE' && coinMode) chainCount = State.get('coinsInserted');
     else if (stage === 'RUNNING') chainCount = State.get('roundCoins');
     for (var i = 0; i < chainCount; i++) {
-      var ox = cx - 8 + (i % 3) * 8;
-      var oy = cy + 14 - M.floor(i / 3) * 5 + M.floor(M.sin(t * 0.8 + i) * 2);
-      ctx.strokeStyle = CO.CHAIN; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(ox, oy, 7, 4, 0, 0, M.PI * 2); ctx.stroke();
+      var col = i % 3;
+      var row = M.floor(i / 3);
+      // 水平散开，位于头顶上方
+      var baseX = cx - 10 + col * 10;
+      var baseY = cy - 32 - row * 6;
+      // 牛仔式晃荡: 水平旋转+垂直摆动
+      var swingAngle = M.sin(t * 2.5 + i * 1.3) * 0.4;
+      var swayY = M.sin(t * 3 + i * 0.8) * 2;
+      var ox = baseX + M.sin(swingAngle) * 6;
+      var oy = baseY + swayY;
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.rotate(swingAngle);
+      ctx.strokeStyle = CO.CHAIN; ctx.lineWidth = 1.5;
+      ctx.shadowColor = CO.CHAIN_GLOW; ctx.shadowBlur = 3;
+      ctx.beginPath(); ctx.ellipse(0, 0, 6, 3.5, 0, 0, M.PI * 2); ctx.stroke();
+      ctx.shadowBlur = 0;
+      // 链节高光
+      ctx.fillStyle = '#8899AA';
+      ctx.fillRect(-2, -1, 4, 2);
+      ctx.restore();
     }
   }
 
@@ -526,6 +649,7 @@ var ZhongKui = (function() {
     init: init, draw: draw, updateDOM: updateDOM,
     getShopScrollY: function() { return shopScrollY; },
     setShopScrollY: function(v) { shopScrollY = v; },
+    getSelectedTea: function() { return shopSelectedTea; },
     exitCoinMode: function() { coinMode = false; },
     getEffectDesc: getEffectDesc,
     drawSettings: drawSettings,

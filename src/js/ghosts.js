@@ -129,101 +129,207 @@ var Ghosts = (function() {
     }
   }
 
-  // ── 牛头: 棕色牛头人身,胆小抖动 ──
+  // ── 牛头 V2: 棕色牛头人身,胆小颤抖 ──
   function drawNiutou(ctx, gx, gy, w, h, halfW, halfH, t, seed) {
     var shake = M.floor(M.sin(t * 8 + seed) * 1.5);
+    // 身体(梯形感)
     ctx.fillStyle = '#8B4513';
-    ctx.fillRect(gx - halfW + shake, gy - halfH, w, h);
+    ctx.fillRect(gx - halfW + shake, gy - halfH + 3, w, h - 3);
+    // 牛胸(浅色)
+    ctx.fillStyle = '#A0522D';
+    ctx.fillRect(gx - halfW + 2 + shake, gy - halfH + 6, w - 4, 4);
+    // 牛角(向上弯曲)
     ctx.fillStyle = '#654321';
-    ctx.fillRect(gx - halfW + 2 + shake, gy - halfH - 4, 3, 4);
-    ctx.fillRect(gx + halfW - 5 + shake, gy - halfH - 4, 3, 4);
-    ctx.fillStyle = '#CD7F32';
-    ctx.fillRect(gx - 1 + shake, gy - halfH + 4, 3, 2);
+    ctx.fillRect(gx - halfW + 1 + shake, gy - halfH - 5, 3, 6);
+    ctx.fillRect(gx - halfW + shake, gy - halfH - 6, 2, 3);
+    ctx.fillRect(gx + halfW - 4 + shake, gy - halfH - 5, 3, 6);
+    ctx.fillRect(gx + halfW - 2 + shake, gy - halfH - 6, 2, 3);
+    // 牛耳
+    ctx.fillRect(gx - halfW - 1 + shake, gy - halfH + 1, 2, 3);
+    ctx.fillRect(gx + halfW - 1 + shake, gy - halfH + 1, 2, 3);
+    // 牛鼻环(金色)
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(gx - 1 + shake, gy - halfH + 5, 3, 2);
+    // 眼睛(大而圆, 胆小)
     ctx.fillStyle = '#FFF';
-    ctx.fillRect(gx - 4 + shake, gy - halfH + 3, 2, 2);
-    ctx.fillRect(gx + 3 + shake, gy - halfH + 3, 2, 2);
+    ctx.fillRect(gx - 5 + shake, gy - halfH + 2, 3, 3);
+    ctx.fillRect(gx + 2 + shake, gy - halfH + 2, 3, 3);
     ctx.fillStyle = '#000';
-    ctx.fillRect(gx - 3 + shake, gy - halfH + 3, 1, 1);
-    ctx.fillRect(gx + 4 + shake, gy - halfH + 3, 1, 1);
-    ctx.fillStyle = '#654321';
-    ctx.fillRect(gx - halfW + 2 + shake, gy + halfH, 4, 4);
-    ctx.fillRect(gx + halfW - 6 + shake, gy + halfH, 4, 4);
+    ctx.fillRect(gx - 4 + shake, gy - halfH + 3, 1, 1);
+    ctx.fillRect(gx + 3 + shake, gy - halfH + 3, 1, 1);
+    // 眼泪(胆小鬼哭)
+    ctx.fillStyle = '#4169E1';
+    ctx.fillRect(gx - 4 + shake, gy - halfH + 6, 1, 2);
+    ctx.fillRect(gx + 3 + shake, gy - halfH + 6, 1, 2);
+    // 牛蹄
+    ctx.fillStyle = '#3D2914';
+    ctx.fillRect(gx - halfW + 2 + shake, gy + halfH - 2, 4, 4);
+    ctx.fillRect(gx + halfW - 6 + shake, gy + halfH - 2, 4, 4);
+    ctx.fillStyle = '#1A1A1A';
+    ctx.fillRect(gx - halfW + 3 + shake, gy + halfH + 1, 2, 1);
+    ctx.fillRect(gx + halfW - 5 + shake, gy + halfH + 1, 2, 1);
   }
 
-  // ── 马面: 靛紫马脸,沉稳漂浮 ──
+  // ── 马面 V2: 靛紫马脸,沉稳漂浮 ──
   function drawMamian(ctx, gx, gy, w, h, halfW, halfH, t, seed) {
     var bob = M.floor(M.sin(t * 1.5 + seed) * 2);
+    // 身体(梯形)
     ctx.fillStyle = '#4B0082';
-    ctx.fillRect(gx - halfW, gy - halfH + bob, w, h);
+    ctx.fillRect(gx - halfW, gy - halfH + 3 + bob, w, h - 3);
+    // 马脸(长形, 向下延伸)
     ctx.fillStyle = '#6A0DAD';
-    ctx.fillRect(gx - halfW + 1, gy - halfH - 3 + bob, w - 2, 3);
-    ctx.fillRect(gx - halfW + 1, gy - halfH + 3 + bob, w - 2, 2);
+    ctx.fillRect(gx - halfW + 2, gy - halfH - 4 + bob, w - 4, 7);
+    ctx.fillRect(gx - 2, gy - halfH + 2 + bob, 4, 5); // 马鼻
+    // 鬃毛(飘逸, 随方向摆动)
+    var maneDir = M.floor(M.sin(t * 2 + seed) * 2);
+    ctx.fillStyle = '#8A2BE2';
+    ctx.fillRect(gx - halfW - 2 + maneDir, gy - halfH - 2 + bob, 3, 6);
+    ctx.fillRect(gx + halfW - 1 + maneDir, gy - halfH - 2 + bob, 3, 6);
+    ctx.fillRect(gx - halfW + 1, gy - halfH - 6 + bob, w - 2, 3);
+    // 马耳
+    ctx.fillRect(gx - halfW + 1, gy - halfH - 8 + bob, 2, 3);
+    ctx.fillRect(gx + halfW - 3, gy - halfH - 8 + bob, 2, 3);
+    // 眼睛(细长)
     ctx.fillStyle = '#FFF';
-    ctx.fillRect(gx - 4, gy - halfH + 2 + bob, 2, 2);
-    ctx.fillRect(gx + 3, gy - halfH + 2 + bob, 2, 2);
+    ctx.fillRect(gx - 5, gy - halfH + 1 + bob, 3, 2);
+    ctx.fillRect(gx + 2, gy - halfH + 1 + bob, 3, 2);
     ctx.fillStyle = '#000';
-    ctx.fillRect(gx - 3, gy - halfH + 2 + bob, 1, 1);
-    ctx.fillRect(gx + 4, gy - halfH + 2 + bob, 1, 1);
-    ctx.fillStyle = '#4B0082';
-    ctx.fillRect(gx - halfW + 2, gy + halfH + bob, 4, 4);
-    ctx.fillRect(gx + halfW - 6, gy + halfH + bob, 4, 4);
+    ctx.fillRect(gx - 4, gy - halfH + 1 + bob, 2, 1);
+    ctx.fillRect(gx + 3, gy - halfH + 1 + bob, 2, 1);
+    // 鼻孔
+    ctx.fillStyle = '#1A1A1A';
+    ctx.fillRect(gx - 1, gy - halfH + 4 + bob, 1, 1);
+    ctx.fillRect(gx + 1, gy - halfH + 4 + bob, 1, 1);
+    // 蹄
+    ctx.fillStyle = '#2D0052';
+    ctx.fillRect(gx - halfW + 2, gy + halfH - 2 + bob, 4, 4);
+    ctx.fillRect(gx + halfW - 6, gy + halfH - 2 + bob, 4, 4);
   }
 
-  // ── 黑无常: 纯黑身体+鬼火绿眼,疯狂高速 ──
+  // ── 黑无常 V2: 纯黑身体+鬼火绿眼,疯狂高速 ──
   function drawHeiWuchang(ctx, gx, gy, w, h, halfW, halfH, t, seed) {
     var jitter = M.floor(M.sin(t * 12 + seed * 3) * 2);
+    // 高帽(4px高)
+    ctx.fillStyle = '#0A0A0A';
+    ctx.fillRect(gx - halfW + 3 + jitter, gy - halfH - 8, w - 6, 8);
+    ctx.fillStyle = '#1A1A1A';
+    ctx.fillRect(gx - halfW + 1 + jitter, gy - halfH - 2, w - 2, 2);
+    // 帽上字(白色)
+    ctx.fillStyle = '#FFF';
+    ctx.fillRect(gx - 1 + jitter, gy - halfH - 6, 2, 3);
+    // 身体(瘦长)
     ctx.fillStyle = '#1A1A1A';
     ctx.fillRect(gx - halfW + jitter, gy - halfH, w, h);
-    ctx.fillStyle = '#333';
-    ctx.fillRect(gx - halfW + 2 + jitter, gy - halfH - 2, w - 4, 2);
-    ctx.fillStyle = '#39FF14';
-    ctx.fillRect(gx - 4 + jitter, gy - halfH + 3, 3, 3);
-    ctx.fillRect(gx + 2 + jitter, gy - halfH + 3, 3, 3);
+    ctx.fillStyle = '#2A2A2A';
+    ctx.fillRect(gx - halfW + 2 + jitter, gy - halfH + 2, w - 4, h - 4);
+    // 长舌(血红, 下垂)
+    var tongueLen = M.floor(M.sin(t * 3 + seed) * 2);
+    ctx.fillStyle = '#DC143C';
+    ctx.fillRect(gx - 1 + jitter, gy - halfH + 5, 2, 6 + tongueLen);
+    ctx.fillRect(gx - 2 + jitter, gy - halfH + 10 + tongueLen, 4, 1); // 舌尖分叉
+    // 鬼火绿眼(闪烁)
+    var eyeGlow = M.sin(t * 8 + seed) > 0 ? '#39FF14' : '#1A7A0A';
+    ctx.shadowColor = '#39FF14';
+    ctx.shadowBlur = M.sin(t * 8 + seed) > 0 ? 6 : 2;
+    ctx.fillStyle = eyeGlow;
+    ctx.fillRect(gx - 5 + jitter, gy - halfH + 2, 4, 4);
+    ctx.fillRect(gx + 1 + jitter, gy - halfH + 2, 4, 4);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#0D0D1A';
-    ctx.fillRect(gx - 3 + jitter, gy - halfH + 4, 1, 1);
-    ctx.fillRect(gx + 3 + jitter, gy - halfH + 4, 1, 1);
-    ctx.fillStyle = '#1A1A1A';
-    ctx.fillRect(gx - halfW + 2 + jitter, gy + halfH, 4, 4);
-    ctx.fillRect(gx + halfW - 6 + jitter, gy + halfH, 4, 4);
+    ctx.fillRect(gx - 4 + jitter, gy - halfH + 3, 2, 2);
+    ctx.fillRect(gx + 2 + jitter, gy - halfH + 3, 2, 2);
+    // 锁链(手中持)
+    ctx.fillStyle = '#708090';
+    ctx.fillRect(gx - halfW - 2 + jitter, gy - halfH + 6, 3, 2);
+    // 脚(飘忽)
+    var footJitter = M.floor(M.sin(t * 15 + seed) * 3);
+    ctx.fillStyle = '#0A0A0A';
+    ctx.fillRect(gx - halfW + 2 + jitter + footJitter, gy + halfH, 4, 3);
+    ctx.fillRect(gx + halfW - 6 + jitter - footJitter, gy + halfH, 4, 3);
   }
 
-  // ── 白无常: 惨白身体+血红舌,阴冷闪现 ──
+  // ── 白无常 V2: 惨白身体+血红舌,阴冷闪现 ──
   function drawBaiWuchang(ctx, gx, gy, w, h, halfW, halfH, t, seed) {
     var slowBob = M.floor(M.sin(t * 0.8 + seed) * 2);
     var flicker = M.sin(t * 6 + seed * 2);
-    var alpha = flicker > 0.7 ? 0.6 : 1;
+    var alpha = flicker > 0.7 ? 0.5 : 1;
     ctx.globalAlpha = alpha;
+    // 高帽(白色)
+    ctx.fillStyle = '#F0F0F0';
+    ctx.fillRect(gx - halfW + 3, gy - halfH - 6 + slowBob, w - 6, 6);
+    ctx.fillStyle = '#E0E0E0';
+    ctx.fillRect(gx - halfW + 1, gy - halfH - 2 + slowBob, w - 2, 2);
+    // 身体(惨白)
     ctx.fillStyle = '#F0F0F0';
     ctx.fillRect(gx - halfW, gy - halfH + slowBob, w, h);
-    ctx.fillStyle = '#E0E0E0';
-    ctx.fillRect(gx - halfW + 2, gy - halfH - 3 + slowBob, w - 4, 3);
-    ctx.fillStyle = '#DC143C';
-    ctx.fillRect(gx - 2, gy - halfH + 5 + slowBob, 5, 2);
+    ctx.fillStyle = '#E8E8E8';
+    ctx.fillRect(gx - halfW + 2, gy - halfH + 2 + slowBob, w - 4, h - 4);
+    // 哭脸(眼泪=蓝色下落)
     ctx.fillStyle = '#000';
     ctx.fillRect(gx - 5, gy - halfH + 2 + slowBob, 2, 2);
     ctx.fillRect(gx + 3, gy - halfH + 2 + slowBob, 2, 2);
+    ctx.fillRect(gx - 2, gy - halfH + 5 + slowBob, 4, 1); // 嘴
+    // 眼泪(蓝色, 随时间下落)
+    var tearY = M.floor((t * 20 + seed * 10) % 8);
+    ctx.fillStyle = '#4169E1';
+    ctx.fillRect(gx - 5, gy - halfH + 4 + slowBob + tearY, 1, 2);
+    ctx.fillRect(gx + 4, gy - halfH + 4 + slowBob + tearY, 1, 2);
+    // 长舌(血红)
+    ctx.fillStyle = '#DC143C';
+    ctx.fillRect(gx - 1, gy - halfH + 6 + slowBob, 2, 5);
+    // 惨白光环(pulse)
+    ctx.globalAlpha = alpha * (0.3 + M.sin(t * 3 + seed) * 0.2);
     ctx.fillStyle = '#F0F0F0';
-    ctx.fillRect(gx - halfW + 2, gy + halfH + slowBob, 4, 4);
-    ctx.fillRect(gx + halfW - 6, gy + halfH + slowBob, 4, 4);
+    ctx.fillRect(gx - halfW - 1, gy - halfH - 1 + slowBob, w + 2, h + 2);
     ctx.globalAlpha = 1;
+    // 脚(飘忽)
+    ctx.fillStyle = '#D0D0D0';
+    ctx.fillRect(gx - halfW + 2, gy + halfH + slowBob, 4, 3);
+    ctx.fillRect(gx + halfW - 6, gy + halfH + slowBob, 4, 3);
   }
 
-  // ── 刑天: 暗红身体+火焰橙,狂暴冲撞 ──
+  // ── 刑天 V2: 暗红身体+火焰橙,狂暴冲撞 ──
   function drawXingtian(ctx, gx, gy, w, h, halfW, halfH, t, seed) {
     var charge = M.floor(M.sin(t * 4 + seed) * 3);
+    // 火焰aura(先画)
+    var auraSize = 2 + M.floor(M.sin(t * 5 + seed) * 2);
+    ctx.fillStyle = 'rgba(255,69,0,0.15)';
+    ctx.fillRect(gx - halfW - auraSize + charge, gy - halfH - auraSize, w + auraSize * 2, h + auraSize * 2);
+    // 身体(暗红, 无头)
     ctx.fillStyle = '#8B0000';
     ctx.fillRect(gx - halfW + charge, gy - halfH, w, h);
-    ctx.fillStyle = '#FF4500';
-    ctx.fillRect(gx - halfW + 2 + charge, gy - halfH - 2, w - 4, 2);
-    ctx.fillStyle = '#FFD700';
-    ctx.fillRect(gx - 4 + charge, gy - halfH + 3, 2, 2);
-    ctx.fillRect(gx + 3 + charge, gy - halfH + 3, 2, 2);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(gx - 3 + charge, gy - halfH + 3, 1, 1);
-    ctx.fillRect(gx + 4 + charge, gy - halfH + 3, 1, 1);
+    ctx.fillStyle = '#A52A2A';
+    ctx.fillRect(gx - halfW + 2 + charge, gy - halfH + 2, w - 4, h - 4);
+    // 肩部(宽阔)
     ctx.fillStyle = '#8B0000';
-    ctx.fillRect(gx - halfW + 2 + charge, gy + halfH, 4, 4);
-    ctx.fillRect(gx + halfW - 6 + charge, gy + halfH, 4, 4);
+    ctx.fillRect(gx - halfW - 2 + charge, gy - halfH + 2, w + 4, 3);
+    // 腹部眼睛×2(金色, 愤怒)
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(gx - 5 + charge, gy - halfH + 5, 3, 3);
+    ctx.fillRect(gx + 2 + charge, gy - halfH + 5, 3, 3);
+    ctx.fillStyle = '#FF4500';
+    ctx.fillRect(gx - 4 + charge, gy - halfH + 6, 1, 1);
+    ctx.fillRect(gx + 3 + charge, gy - halfH + 6, 1, 1);
+    // 嘴(腹部大嘴, 怒吼)
+    ctx.fillStyle = '#4A0000';
+    ctx.fillRect(gx - 3 + charge, gy - halfH + 10, 6, 3);
+    ctx.fillStyle = '#DC143C';
+    ctx.fillRect(gx - 2 + charge, gy - halfH + 11, 4, 1);
+    // 火焰装饰(顶部)
+    var flameH = M.floor(M.sin(t * 6 + seed) * 3);
+    ctx.fillStyle = '#FF4500';
+    ctx.fillRect(gx - 2 + charge, gy - halfH - 3 + flameH, 2, 3);
+    ctx.fillRect(gx + 1 + charge, gy - halfH - 2 + flameH, 2, 2);
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(gx - 1 + charge, gy - halfH - 2 + flameH, 2, 2);
+    // 手臂(粗壮)
+    ctx.fillStyle = '#8B0000';
+    ctx.fillRect(gx - halfW - 3 + charge, gy - halfH + 6, 3, 6);
+    ctx.fillRect(gx + halfW + charge, gy - halfH + 6, 3, 6);
+    // 脚(重踏)
+    ctx.fillStyle = '#5C0000';
+    ctx.fillRect(gx - halfW + 2 + charge, gy + halfH, 5, 4);
+    ctx.fillRect(gx + halfW - 7 + charge, gy + halfH, 5, 4);
   }
 
   // ── 获取链目标鬼 (同套牛doLasso: 按距离中央排序) ──

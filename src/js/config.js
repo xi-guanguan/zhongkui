@@ -20,8 +20,8 @@ var CONFIG = (function() {
     arenaH: 220,
     ARENA_TOP: 80,
     ARENA_BOT: 300,
-    ZHONGKUI_Y: 320,     // 钟馗站立位置
-    zhongkuiY: 320,
+    ZHONGKUI_Y: 380,     // 钟馗站立位置 (下移60px)
+    zhongkuiY: 380,
     DARK_Y: 350,
     BOTTOM_Y: 400,       // 底栏Y
     bottomBarY: 400,
