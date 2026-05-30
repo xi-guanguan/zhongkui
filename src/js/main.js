@@ -13,6 +13,7 @@
   var lastTime = 0, totalTime = 0;
   var _mengpoImg = null;
   var _currentBGM = null;
+  var _lassoTrail = []; // 锁链拖尾位置缓存
 
   function _loadMengpoImg() {
     var img = new Image();
@@ -53,6 +54,10 @@
 
     // 设置面板打开时暂停一切
     if (typeof ZhongKui !== 'undefined' && ZhongKui.isSettingsOpen()) return;
+
+    // 阶段过渡递减
+    var st = State.get('stageTransition');
+    if (st > 0) State.set('stageTransition', M.max(0, st - dt));
 
     Renderer.updateShake(dt);
     Renderer.updateParticles(dt);
@@ -180,6 +185,7 @@
   function doLasso() {
     if (State.get('stage') !== 'RUNNING') return;
     State.changeStage('LASSO');
+    Audio.play('stage');
     Audio.play('chain');
 
     var roundCoins = State.get('roundCoins');
@@ -277,10 +283,14 @@
     ctx.save();
     Renderer.applyShake();
 
+    // 阶段切换过渡覆盖层
+    var trans = State.get('stageTransition');
+
     // 设置面板(最顶层)
     if (typeof ZhongKui !== 'undefined' && ZhongKui.isSettingsOpen()) {
       drawBackground(t);
       ZhongKui.drawSettings(ctx, totalTime);
+      if (trans > 0) { ctx.globalAlpha = trans * 4; ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 1; }
       ctx.restore();
       return;
     }
@@ -290,6 +300,7 @@
       Ghosts.draw(ctx, t);
       drawShopUI(t);
       Renderer.drawHUD();
+      if (trans > 0) { ctx.globalAlpha = trans * 4; ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 1; }
       ctx.restore();
       return;
     }
@@ -297,6 +308,7 @@
     if (stage === 'MINING') {
       Mining.draw(ctx, t);
       Renderer.drawHUD();
+      if (trans > 0) { ctx.globalAlpha = trans * 4; ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 1; }
       ctx.restore();
       return;
     }
@@ -326,6 +338,8 @@
     Renderer.drawHUD();
     Renderer.drawMengpoLine();
     Renderer.drawFlash();
+    // 阶段切换过渡
+    if (trans > 0) { ctx.globalAlpha = M.min(1, trans * 4); ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 1; }
     ctx.restore();
   }
 
@@ -722,6 +736,18 @@
       var ty2 = tg ? tg.y : chain.targetY;
       var cx = originX + M.floor((tx - originX) * ep);
       var cy = originY + M.floor((ty2 - originY) * ep) - M.floor(M.sin(ep * M.PI) * 50);
+      // ── 锁链拖尾 ──
+      if (!_lassoTrail[i]) _lassoTrail[i] = [];
+      _lassoTrail[i].push({x:cx, y:cy, t:t});
+      if (_lassoTrail[i].length > 6) _lassoTrail[i].shift();
+      for (var ti = 0; ti < _lassoTrail[i].length - 1; ti++) {
+        var trail = _lassoTrail[i][ti];
+        var age = (_lassoTrail[i].length - 1 - ti) / 6;
+        ctx.globalAlpha = age * 0.3;
+        ctx.fillStyle = chain.isSuper ? CO.COPPER_SHINE : CO.CHAIN_GLOW;
+        ctx.fillRect(trail.x - 2, trail.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1;
       // 链节纹理+辉光
       var chainColor = chain.isSuper ? CO.COPPER_SHINE : CO.CHAIN;
       var glowColor = chain.isSuper ? '#FFD700' : CO.CHAIN_GLOW;
@@ -780,6 +806,13 @@
         ctx.fillStyle = '#FF0000';
         ctx.fillRect(-3, -2, 2, 2);
         ctx.fillRect(2, -2, 2, 2);
+        // 被拉扯闪光(随机白色高光)
+        if (M.random() > 0.7) {
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = '#FFF';
+          ctx.fillRect(-M.floor(w/2), -M.floor(h/2), w, h);
+          ctx.globalAlpha = 1;
+        }
         ctx.restore();
 
         // 链: 绷紧效果(随拉扯进度链变直+缩短)

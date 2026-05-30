@@ -63,7 +63,10 @@ var State = (function() {
     shake: { x: 0, y: 0, t: 0 },
 
     // ── 帧时间 ──
-    time: 0
+    time: 0,
+
+    // ── 阶段切换过渡 ──
+    stageTransition: 0
   };
 
   function set(key, val) {
@@ -86,6 +89,7 @@ var State = (function() {
     _data.prevStage = _data.stage;
     _data.stage = newStage;
     _data.stageTimer = 0;
+    _data.stageTransition = 0.25; // 阶段切换过渡动画(秒)
     var fns = _listeners['stage'];
     if (fns) { for (var i = 0; i < fns.length; i++) fns[i](newStage); }
   }

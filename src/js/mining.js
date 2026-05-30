@@ -127,7 +127,13 @@ var Mining = (function() {
     if (hookState === HOOK.IDLE) {
       hookState = HOOK.SHOOTING;
       hookLength = 10;
-      Audio.play('chain');
+      Audio.play('mine');
+      // 水花粒子
+      if (typeof Renderer !== 'undefined') {
+        for (var wi = 0; wi < 8; wi++) {
+          Renderer.spawnParticles(hookX + (Math.random()-0.5)*20, hookY + 5, 'rgba(57,255,20,0.6)', 1);
+        }
+      }
     }
   }
 

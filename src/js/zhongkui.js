@@ -163,6 +163,7 @@ var ZhongKui = (function() {
     State.set('_lassoFlash', false);
     State.set('_prevSettleCoins', 0);
     State.changeStage('RUNNING');
+    Audio.play('stage');
     Audio.play('coin');
     updateDOM();
   }
@@ -175,8 +176,11 @@ var ZhongKui = (function() {
 
   function doHit() {
     if (State.get('stage') !== 'HITTING') return;
-    State.set('hitCount', State.get('hitCount') + 1);
+    var hc = State.get('hitCount') + 1;
+    State.set('hitCount', hc);
     Audio.play('hit');
+    // 连击音效
+    if (hc >= 3 && hc % 3 === 0) Audio.play('combo');
     Renderer.triggerShake(1);
     updateDOM();
   }
@@ -293,7 +297,7 @@ var ZhongKui = (function() {
       case 'special_catch': buffs.special_catch={lockedIdx:M.floor(M.random()*CONFIG.GT.length),remaining:tea.duration}; break;
       case 'special_super': buffs.special_super={remaining:tea.duration}; break;
     }
-    Audio.play('coin');
+    Audio.play('buy');
     Renderer.spawnFloatingText(W/2, 180, '+' + tea.name, CO.GHOST_GREEN);
     if (typeof MengPo !== 'undefined') { State.set('mengpoLine', MengPo.getLine('buy')); State.set('mengpoLineTimer', 2.5); }
   }
@@ -315,6 +319,7 @@ var ZhongKui = (function() {
     var favor = State.get('favor');
     favor.exp++;
     if (State.checkFavorLevelUp()) {
+      Audio.play('levelup');
       Renderer.spawnFloatingText(W/2, 160, '好感升级! Lv.'+favor.level, CO.COPPER_SHINE);
       if (typeof MengPo !== 'undefined') { State.set('mengpoLine', MengPo.getLine('levelUp')); State.set('mengpoLineTimer', 3); }
     }

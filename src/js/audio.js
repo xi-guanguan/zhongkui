@@ -181,6 +181,40 @@ var Audio = (function() {
         osc.type='triangle'; osc.frequency.setValueAtTime(600,t);
         gain.gain.setValueAtTime(0.1,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.06);
         osc.start(t); osc.stop(t+0.06); break;
+      // ── 新增音效 ──
+      case 'shop': // 商店开门
+        osc.type='sine'; osc.frequency.setValueAtTime(523,t);
+        osc.frequency.setValueAtTime(659,t+0.08);
+        gain.gain.setValueAtTime(0.12,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+        osc.start(t); osc.stop(t+0.25); break;
+      case 'buy': // 购买成功
+        osc.type='triangle'; osc.frequency.setValueAtTime(1047,t);
+        osc.frequency.exponentialRampToValueAtTime(2093,t+0.1);
+        gain.gain.setValueAtTime(0.12,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+        osc.start(t); osc.stop(t+0.15); break;
+      case 'mine': // 挖矿发射
+        osc.type='sawtooth'; osc.frequency.setValueAtTime(400,t);
+        osc.frequency.exponentialRampToValueAtTime(100,t+0.2);
+        gain.gain.setValueAtTime(0.08,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+        osc.start(t); osc.stop(t+0.2); break;
+      case 'combo': // 连击
+        osc.type='square'; osc.frequency.setValueAtTime(440,t);
+        osc.frequency.setValueAtTime(554,t+0.05);
+        osc.frequency.setValueAtTime(659,t+0.1);
+        gain.gain.setValueAtTime(0.1,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+        osc.start(t); osc.stop(t+0.15); break;
+      case 'levelup': // 好感升级
+        osc.type='sine'; osc.frequency.setValueAtTime(523,t);
+        osc.frequency.setValueAtTime(659,t+0.08);
+        osc.frequency.setValueAtTime(784,t+0.16);
+        osc.frequency.setValueAtTime(1047,t+0.24);
+        gain.gain.setValueAtTime(0.15,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+        osc.start(t); osc.stop(t+0.5); break;
+      case 'stage': // 阶段切换
+        osc.type='triangle'; osc.frequency.setValueAtTime(300,t);
+        osc.frequency.exponentialRampToValueAtTime(600,t+0.1);
+        gain.gain.setValueAtTime(0.08,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+        osc.start(t); osc.stop(t+0.15); break;
       default: break;
     }
   }
