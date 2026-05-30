@@ -1,4 +1,5 @@
 /* 钟馗：冥界抓鬼 — 320×480竖屏适配 */
+/* UI布局匹配线框图: 底部三圆形按钮 [设置⚙] [主操作⭕] [孟婆→] */
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{
   width:100vw;height:100dvh;overflow:hidden;
@@ -51,36 +52,73 @@ canvas{
 }
 #touch-layer.active{pointer-events:auto;cursor:pointer}
 
-/* 底部操作栏 (同套牛) */
+/* ── 底部操作栏 (线框图: 三圆形按钮) ── */
 #bottom-bar{
   flex-shrink:0;
-  min-height:64px;
+  min-height:80px;
   display:flex;justify-content:center;align-items:center;
-  gap:12px;padding:10px 16px;
-  padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  gap:24px;padding:8px 16px;
+  padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));
   background:#0a0a0a;
   border-top:3px solid #1a1a2e;
 }
-.btn{
-  flex:1;max-width:180px;
-  min-height:56px;
-  background:#FFB800;
-  color:#1A1A2E;border:3px solid #E6A000;
-  font-family:'Courier New',monospace;font-size:18px;font-weight:bold;
-  cursor:pointer;text-align:center;letter-spacing:1px;
-  padding:0 20px;border-radius:0;
-  box-shadow:0 4px 0 #996600,0 6px 8px rgba(0,0,0,.4);
+
+/* 小圆形按钮 (设置/孟婆) */
+.btn-sm{
+  width:56px;height:56px;
+  border-radius:50%;
+  background:#0F0F23;
+  color:#FFD700;
+  border:3px solid #FFD700;
+  font-size:22px;
+  cursor:pointer;
+  display:flex;justify-content:center;align-items:center;
+  box-shadow:0 3px 0 rgba(10,10,26,0.8);
   transition:transform .06s,box-shadow .06s;
   -webkit-tap-highlight-color:transparent;
   position:relative;top:0;
+  font-family:'Courier New',monospace;
 }
-.btn:active{
+.btn-sm:active{
   transform:translateY(3px);
-  box-shadow:0 1px 0 #996600,0 2px 4px rgba(0,0,0,.4);
+  box-shadow:0 0 0 rgba(10,10,26,0.8);
 }
-.btn:disabled{
-  background:#444;
-  border-color:#222;color:#555;
-  box-shadow:0 4px 0 #1a1a1a,0 6px 8px rgba(0,0,0,.4);
+.btn-sm:disabled{
+  background:#2A2A4A;border-color:#3A3A6A;color:#505070;
+  pointer-events:none;
+}
+
+/* 大圆形主操作按钮 */
+.btn-lg{
+  width:80px;height:80px;
+  border-radius:50%;
+  background:transparent;
+  color:#FF3030;
+  border:6px solid #FF3030;
+  font-size:16px;font-weight:bold;
+  font-family:'Courier New',monospace;
+  cursor:pointer;
+  display:flex;justify-content:center;align-items:center;
+  box-shadow:0 3px 0 rgba(10,10,26,0.8),inset 0 0 12px rgba(255,48,48,0.15);
+  transition:transform .06s,box-shadow .06s,background .15s;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;top:0;
+}
+.btn-lg:active{
+  transform:translateY(3px);
+  box-shadow:0 0 0 rgba(10,10,26,0.8),inset 0 0 12px rgba(255,48,48,0.15);
+}
+/* 主操作按钮变体状态 (通过JS动态设class) */
+.btn-lg.hit-mode{
+  border-color:#FF4444;color:#FF4444;
+  background:rgba(255,68,68,0.15);
+}
+.btn-lg.settle-mode{
+  border-color:#50C878;color:#50C878;
+  background:rgba(80,200,120,0.15);
+}
+.btn-lg:disabled{
+  border-color:#3A3A6A;color:#505070;
+  background:transparent;
   pointer-events:none;
 }

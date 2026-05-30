@@ -137,10 +137,7 @@ var Mining = (function() {
     var income = State.getMiningIncome();
     State.set('coins', State.get('coins') + income);
     Renderer.spawnFloatingText(W/2, H/2, '+' + income + ' 铜钱', CONFIG.CO.COPPER);
-    State.changeStage('SHOP');
-    // 孟婆迎接台词
-    State.set('mengpoLine', MengPo.getLine('back'));
-    State.set('mengpoLineTimer', 2.5);
+    State.changeStage('IDLE');  // ★ 回到IDLE，商店是独立入口
   }
 
   function draw(ctx, t) {

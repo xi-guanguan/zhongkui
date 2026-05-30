@@ -19,9 +19,10 @@
     ctx = canvas.getContext('2d');
     Renderer.init(canvas);
     Audio.init();
+    loadSave();       // ★ 先加载存档
     ZhongKui.init();
     State.changeStage('IDLE');
-    console.log('[钟馗] 初始化完成, 分辨率:', W, 'x', H);
+    console.log('[钟馗] 初始化完成, 分辨率:', W, 'x', H, '铜钱:', State.get('coins'));
   }
 
   // ── 主循环 ──
@@ -134,36 +135,6 @@
         Mining.update(dt);
         break;
     }
-  }
-
-  // ── 投币 (同套牛addCoin) ──
-  function addCoin() {
-    if (State.get('stage') !== 'IDLE') return;
-    if (State.get('coins') <= 0) {
-      Renderer.spawnFloatingText(W/2, 200, '铜钱不足!', '#FF4444');
-      return;
-    }
-    var inserted = State.get('coinsInserted');
-    if (inserted >= State.get('maxCoins')) return;
-    State.set('coins', State.get('coins') - 1);
-    State.set('coinsInserted', inserted + 1);
-    Audio.play('coin');
-  }
-
-  // ── 开始游戏 (同套牛doStart) ──
-  function doStart() {
-    if (State.get('stage') !== 'IDLE') return;
-    var inserted = State.get('coinsInserted');
-    if (inserted === 0) return;
-
-    State.set('roundCoins', inserted);  // 保存本轮投币数
-    Ghosts.initRound();  // 重新生成鬼队列(新cycle)
-    State.set('observeTimer', 8);
-    State.set('countdownTimer', 5);
-    State.set('runningSubPhase', 'OBSERVE');
-    State.set('chains', []);
-    State.set('roundResult', null);
-    State.changeStage('RUNNING');
   }
 
   // ── 丢链 (同套牛doLasso) ──
@@ -350,39 +321,45 @@
     ctx.fillRect(0, LY.BOTTOM_Y - 20, W, LY.BOTTOM_H + 20);
   }
 
-  // ── 待机UI (同套牛sIdle) ──
+  // ── 待机UI (线框图: 画布内显示标题+提示，投币选择器在zhongkui.js) ──
   function drawIdleUI(t) {
     var inserted = State.get('coinsInserted');
-    if (inserted > 0) {
-      // 投币后: 钟馗在底部，显示已投币数+提示开始
-      ctx.font = FS.M + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = CO.COPPER_SHINE;
-      ctx.fillText('已投 ' + inserted + ' 币', W/2, LY.BOTTOM_Y + 30);
-      ctx.globalAlpha = 0.5 + M.sin(t * 4) * 0.3;
-      ctx.fillStyle = CO.BONE;
-      ctx.font = FS.S + 'px monospace';
-      ctx.fillText('按「开始」出链', W/2, LY.BOTTOM_Y + 55);
-      ctx.globalAlpha = 1;
-    } else {
-      // 未投币: 标题+提示
-      ctx.font = 'bold ' + FS.L + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = CO.COPPER_SHINE;
-      ctx.fillText('黑笑话：钟馗', W/2, 180);
-      ctx.font = FS.M + 'px monospace';
-      ctx.fillStyle = CO.BONE;
-      ctx.fillText('按「投币」开始', W/2, 220);
+    var coins = State.get('coins');
 
-      // 商店入口 (同套牛IDLE商店入口)
-      ctx.fillStyle = CO.DARK;
-      ctx.fillRect(W - 52, LY.HUD_H + 8, 44, 20);
-      ctx.fillStyle = '#654321';
-      ctx.fillRect(W - 50, LY.HUD_H + 10, 40, 16);
+    // 标题 (线框图: 游戏演出区中央)
+    ctx.font = 'bold ' + FS.L + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = CO.COPPER_SHINE;
+    ctx.fillText('黑笑话：钟馗', W/2, 180);
+
+    if (ZhongKui.isCoinSelectorOpen()) {
+      // 投币选择器打开中
+      ctx.font = FS.M + 'px monospace';
+      ctx.fillStyle = CO.BONE;
+      ctx.fillText('选择投币数后按「确认」', W/2, 220);
+
+      // 渲染投币选择器
+      ZhongKui.drawCoinSelector(ctx, t);
+    } else {
+      // 未投币: 提示按主操作按钮
+      ctx.font = FS.M + 'px monospace';
+      ctx.fillStyle = CO.BONE;
+      ctx.fillText('按「投币」开始游戏', W/2, 220);
+      ctx.font = FS.S + 'px monospace';
+      ctx.fillStyle = '#A0A0C0';
+      ctx.fillText('持有 ' + coins + ' 铜钱', W/2, 244);
+
+      // 打工入口 (线框图: 游戏演出区下方)
+      var workBtnX = W/2 - 50, workBtnY = 360, workBtnW = 100, workBtnH = 28;
+      ctx.fillStyle = '#1B1B3A';
+      ctx.fillRect(workBtnX, workBtnY, workBtnW, workBtnH);
+      ctx.strokeStyle = '#3A3A6A';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(workBtnX + 1, workBtnY + 1, workBtnW - 2, workBtnH - 2);
       ctx.font = FS.S + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillStyle = CO.COPPER_SHINE;
-      ctx.fillText('孟婆', W - 30, LY.HUD_H + 22);
+      ctx.fillStyle = CO.COPPER;
+      ctx.fillText('打工赚币', W/2, workBtnY + 18);
     }
   }
 
@@ -792,10 +769,7 @@
 
   // ── 暴露给ZhongKui模块用的方法 ──
   window._GameAPI = {
-    addCoin: addCoin,
-    doStart: doStart,
     doHit: doHit,
     doSettle: doSettle,
-    buyTea: null,  // 由zhongkui.js设置
   };
 })();
