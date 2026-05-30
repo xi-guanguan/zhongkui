@@ -114,18 +114,18 @@
 
     if (anyCaught) {
       State.set('coins', State.get('coins') + totalWin);
-      Renderer.spawnFloatingText(W/2, 350, '+' + totalWin + ' 铜钱', CO.COPPER_SHINE);
-      Renderer.spawnParticles(W/2, 300, CO.COPPER_SHINE, 10);
+      Renderer.spawnFloatingText(W/2, 250, '+' + totalWin + ' 铜钱', CO.COPPER_SHINE);
+      Renderer.spawnParticles(W/2, 200, CO.COPPER_SHINE, 10);
       if (totalWin >= 5) {
         Audio.play('bigwin');
         Renderer.triggerShake(10);
       } else {
         Audio.play('catchOk');
       }
-      console.log('[结算] 抓到鬼! +' + totalWin + '铜钱 (odds=' + chains[i].odds + ')');
+      console.log('[结算] 抓到鬼! +' + totalWin + '铜钱');
     } else {
       Audio.play('escape');
-      Renderer.spawnFloatingText(W/2, 350, '跑了...', CO.BLOOD);
+      Renderer.spawnFloatingText(W/2, 250, '跑了...', CO.BLOOD);
       console.log('[结算] 鬼跑了');
     }
 
@@ -208,16 +208,16 @@
   function drawBackground(t) {
     // 天空
     ctx.fillStyle = CO.DUSK;
-    ctx.fillRect(0, LY.hudH, W, LY.skyH);
+    ctx.fillRect(0, LY.HUD_H, W, LY.SKY_H);
     // 竞技场
     ctx.fillStyle = '#180E22';
-    ctx.fillRect(0, LY.arenaY, W, LY.arenaH);
+    ctx.fillRect(0, LY.ARENA_Y, W, LY.ARENA_H);
     // 钟馗区
     ctx.fillStyle = CO.FOG;
-    ctx.fillRect(0, LY.zhongkuiY - 20, W, 40);
+    ctx.fillRect(0, LY.ZHONGKUI_Y - 20, W, 40);
     // 底区
     ctx.fillStyle = CO.VOID;
-    ctx.fillRect(0, LY.bottomBarY - 20, W, LY.bottomBarH + 20);
+    ctx.fillRect(0, LY.BOTTOM_Y - 20, W, LY.BOTTOM_H + 20);
   }
 
   // ── 菜单 ──
@@ -225,10 +225,10 @@
     ctx.font = 'bold ' + FS.L + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.COPPER_SHINE;
-    ctx.fillText('黑笑话：钟馗', W/2, 300);
+    ctx.fillText('黑笑话：钟馗', W/2, 180);
     ctx.font = FS.M + 'px monospace';
     ctx.fillStyle = CO.BONE;
-    ctx.fillText('点击开始', W/2, 400);
+    ctx.fillText('点击开始', W/2, 250);
     Renderer.drawBottomBar();
   }
 
@@ -238,20 +238,20 @@
     ctx.font = FS.L + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.GHOST_GREEN;
-    ctx.fillText('拍! x' + hitCount, W/2, 700);
+    ctx.fillText('拍! x' + hitCount, W/2, LY.BOTTOM_Y - 10);
 
     // 进度条(纯装饰)
     var prog = Math.min(1, State.get('hitTimer') / 2.0);
     ctx.fillStyle = '#333';
-    ctx.fillRect(50, 720, W - 100, 8);
+    ctx.fillRect(40, LY.BOTTOM_Y + 2, W - 80, 6);
     ctx.fillStyle = CO.GHOST_GREEN;
-    ctx.fillRect(50, 720, (W - 100) * prog, 8);
+    ctx.fillRect(40, LY.BOTTOM_Y + 2, (W - 80) * prog, 6);
   }
 
   // ── 结果UI ──
   function drawResultUI() {
     var chains = State.get('chains');
-    var y = 650;
+    var y = LY.ZHONGKUI_Y - 30;
     ctx.font = FS.M + 'px monospace';
     ctx.textAlign = 'center';
 
@@ -259,12 +259,12 @@
       var c = chains[i];
       var label = c.caught ? ('链' + (i+1) + ': x' + c.odds) : ('链' + (i+1) + ': 断');
       ctx.fillStyle = c.caught ? CO.COPPER_SHINE : CO.BLOOD;
-      ctx.fillText(label, W/2, y + i * 22);
+      ctx.fillText(label, W/2, y + i * 20);
     }
     Renderer.drawBottomBar();
   }
 
-  // ── 商店UI ──
+  // ── 商店UI (双列紧凑布局，适配320×480) ──
   function drawShopUI() {
     var teas = CONFIG.MILK_TEA;
     var coins = State.get('coins');
@@ -272,51 +272,57 @@
     ctx.font = FS.M + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.LANTERN;
-    ctx.fillText('— 孟婆奶茶 —', W/2, 140);
+    ctx.fillText('— 孟婆奶茶 —', W/2, 60);
 
-    var startY = 180;
+    // 双列布局: 左5种奶红+特调, 右5种奶绿+特调
+    var colW = 145, rowH = 50;
+    var startY = 78;
+    var leftX = 8, rightX = W/2 + 5;
+
     for (var i = 0; i < teas.length; i++) {
       var tea = teas[i];
-      var ry = startY + i * 55;
+      var col = i < 5 ? 0 : 1;
+      var row = i < 5 ? i : i - 5;
+      var tx = col === 0 ? leftX : rightX;
+      var ty = startY + row * rowH;
       var canBuy = coins >= tea.price;
 
       // 条目背景
       ctx.fillStyle = canBuy ? 'rgba(44,27,61,0.8)' : 'rgba(30,30,30,0.5)';
-      ctx.fillRect(30, ry, W - 60, 45);
+      ctx.fillRect(tx, ty, colW - 4, rowH - 4);
       ctx.strokeStyle = canBuy ? CO.FOG : '#222';
-      ctx.strokeRect(30, ry, W - 60, 45);
+      ctx.strokeRect(tx, ty, colW - 4, rowH - 4);
 
       // 名称
       ctx.textAlign = 'left';
       ctx.fillStyle = canBuy ? CO.BONE : '#666';
       ctx.font = FS.S + 'px monospace';
-      ctx.fillText(tea.name, 45, ry + 18);
+      ctx.fillText(tea.name, tx + 4, ty + 15);
 
       // 效果
       var effect = '';
-      if (tea.type === 'red') effect = 'catch+' + (tea.catchBonus*100).toFixed(1) + '% ' + tea.duration + '回合';
-      else if (tea.type === 'green') effect = '赔率+' + tea.oddsBonus + ' ' + tea.duration + '回合';
-      else if (tea.type === 'special_catch') effect = '锁定鬼种 ' + tea.duration + '回合';
-      else if (tea.type === 'special_super') effect = '1链x10概率 ' + tea.duration + '回合';
+      if (tea.type === 'red') effect = '+' + (tea.catchBonus*100).toFixed(0) + '% ' + tea.duration + '局';
+      else if (tea.type === 'green') effect = '赔+' + tea.oddsBonus + ' ' + tea.duration + '局';
+      else if (tea.type === 'special_catch') effect = '锁定 ' + tea.duration + '局';
+      else if (tea.type === 'special_super') effect = 'x10 ' + tea.duration + '局';
       ctx.fillStyle = canBuy ? '#AAA' : '#444';
-      ctx.fillText(effect, 45, ry + 36);
+      ctx.fillText(effect, tx + 4, ty + 30);
 
       // 价格
       ctx.textAlign = 'right';
       ctx.fillStyle = canBuy ? CO.COPPER : '#555';
-      ctx.font = FS.S + 'px monospace';
-      ctx.fillText(tea.price + '币', W - 45, ry + 28);
+      ctx.fillText(tea.price + '币', tx + colW - 10, ty + 30);
     }
 
     // 请孟婆喝一杯
-    var treatY = startY + teas.length * 55 + 10;
+    var treatY = startY + 5 * rowH + 5;
     var canTreat = coins >= CONFIG.MENGPO_TREAT_PRICE;
     ctx.fillStyle = canTreat ? 'rgba(139,0,0,0.4)' : 'rgba(30,30,30,0.5)';
-    ctx.fillRect(30, treatY, W - 60, 45);
+    ctx.fillRect(W/2 - 150, treatY, 300, 36);
     ctx.textAlign = 'center';
     ctx.fillStyle = canTreat ? CO.LANTERN : '#666';
     ctx.font = FS.S + 'px monospace';
-    ctx.fillText('请孟婆喝一杯 (' + CONFIG.MENGPO_TREAT_PRICE + '币)', W/2, treatY + 28);
+    ctx.fillText('请孟婆喝一杯 (' + CONFIG.MENGPO_TREAT_PRICE + '币)', W/2, treatY + 22);
 
     Renderer.drawBottomBar();
   }

@@ -30,7 +30,7 @@ var Renderer = (function() {
 
     // 背景
     ctx.fillStyle = 'rgba(13,13,26,0.9)';
-    ctx.fillRect(0, 0, W, LY.hudH);
+    ctx.fillRect(0, 0, W, LY.HUD_H);
 
     // 铜钱数
     ctx.font = FS.M + 'px monospace';
@@ -71,19 +71,19 @@ var Renderer = (function() {
   function drawBottomBar() {
     var stage = State.get('stage');
     ctx.fillStyle = 'rgba(13,13,26,0.9)';
-    ctx.fillRect(0, LY.bottomBarY, W, LY.bottomBarH);
+    ctx.fillRect(0, LY.BOTTOM_Y, W, LY.BOTTOM_H);
 
     ctx.font = FS.M + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.BONE;
 
     if (stage === 'MENU') {
-      ctx.fillText('[ 开始游戏 ]', W/2, LY.bottomBarY + 55);
+      ctx.fillText('[ 开始游戏 ]', W/2, LY.BOTTOM_Y + 45);
     } else if (stage === 'RESULT') {
-      ctx.fillText('[ 继续 ]', W/2, LY.bottomBarY + 55);
+      ctx.fillText('[ 继续 ]', W/2, LY.BOTTOM_Y + 45);
     } else if (stage === 'SHOP') {
-      ctx.fillText('[ 打工赚钱 ]', W/2 - 80, LY.bottomBarY + 55);
-      ctx.fillText('[ 返回抓鬼 ]', W/2 + 80, LY.bottomBarY + 55);
+      ctx.fillText('[ 打工 ]', W/2 - 60, LY.BOTTOM_Y + 45);
+      ctx.fillText('[ 返回 ]', W/2 + 60, LY.BOTTOM_Y + 45);
     } else if (stage === 'MINING') {
       // 打工HUD由mining模块绘制
     }
@@ -92,16 +92,16 @@ var Renderer = (function() {
   // ── 投币选择器 ──
   function drawCoinSelector() {
     var bet = State.get('betAmount');
-    var y = LY.bottomBarY + 20;
+    var y = LY.BOTTOM_Y + 10;
     ctx.font = FS.S + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.BONE;
-    ctx.fillText('投币:', 60, y + 12);
+    ctx.fillText('投币:', 40, y + 12);
     for (var i = 1; i <= 5; i++) {
       ctx.fillStyle = (i <= bet) ? CO.COPPER : '#333';
-      ctx.fillRect(100 + (i-1)*55, y, 45, 30);
+      ctx.fillRect(65 + (i-1)*48, y, 42, 24);
       ctx.fillStyle = (i <= bet) ? CO.VOID : '#666';
-      ctx.fillText(i, 122 + (i-1)*55, y + 22);
+      ctx.fillText(i, 86 + (i-1)*48, y + 17);
     }
   }
 
@@ -115,15 +115,15 @@ var Renderer = (function() {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = 'rgba(13,13,26,0.85)';
-    var bw = 300, bh = 50;
-    var bx = (W - bw)/2, by = 200;
+    var bw = 260, bh = 40;
+    var bx = (W - bw)/2, by = 120;
     ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = CO.CHAIN_GLOW;
     ctx.strokeRect(bx, by, bw, bh);
     ctx.font = FS.S + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = CO.BONE;
-    ctx.fillText(line, W/2, by + 30);
+    ctx.fillText(line, W/2, by + 25);
     ctx.restore();
   }
 

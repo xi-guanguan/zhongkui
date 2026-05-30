@@ -9,7 +9,7 @@ var ZhongKui = (function() {
 
   // ── 钟馗位置 ──
   var x = W/2;
-  var y = LY.zhongkuiY + 40;
+  var y = LY.ZHONGKUI_Y;
 
   // ── 输入状态 ──
   var tapTarget = null; // {x,y} 点击位置
@@ -78,13 +78,13 @@ var ZhongKui = (function() {
 
   // ── 投币选择+确认 ──
   function handleRoundTap(tx, ty) {
-    var bottomY = LY.bottomBarY;
+    var bottomY = LY.BOTTOM_Y;
     // 投币选择区域
-    if (ty > bottomY && ty < bottomY + 60) {
+    if (ty > bottomY && ty < bottomY + 50) {
       // 检测投币按钮 1~5
       for (var i = 1; i <= 5; i++) {
-        var bx = 100 + (i-1)*55;
-        if (tx > bx && tx < bx + 45) {
+        var bx = 65 + (i-1)*48;
+        if (tx > bx && tx < bx + 42) {
           var bet = State.get('betAmount');
           if (i === bet) {
             // 再次点击已选=确认投币
@@ -97,7 +97,7 @@ var ZhongKui = (function() {
         }
       }
       // 确认按钮
-      if (tx > W/2 - 60 && tx < W/2 + 60 && ty > bottomY + 50) {
+      if (tx > W/2 - 50 && tx < W/2 + 50 && ty > bottomY + 40) {
         startRound();
       }
     }
@@ -123,7 +123,7 @@ var ZhongKui = (function() {
 
   // ── 商店点击 ──
   function handleShopTap(tx, ty) {
-    var bottomY = LY.bottomBarY;
+    var bottomY = LY.BOTTOM_Y;
     // 打工按钮
     if (tx < W/2 && ty > bottomY) {
       State.changeStage('MINING');
@@ -143,16 +143,23 @@ var ZhongKui = (function() {
 
   function handleMilkTeaTap(tx, ty) {
     var teas = CONFIG.MILK_TEA;
-    var startY = 180;
+    var startY = 78;
+    var colW = 145, rowH = 50;
+    var leftX = 8, rightX = W/2 + 5;
+
     for (var i = 0; i < teas.length; i++) {
-      var ry = startY + i * 55;
-      if (ty > ry && ty < ry + 45 && tx > 30 && tx < W - 30) {
+      var col = i < 5 ? 0 : 1;
+      var row = i < 5 ? i : i - 5;
+      var rx = col === 0 ? leftX : rightX;
+      var ry = startY + row * rowH;
+      if (ty > ry && ty < ry + rowH - 4 && tx > rx && tx < rx + colW - 4) {
         buyTea(teas[i]);
         return;
       }
     }
     // 请孟婆喝一杯
-    if (ty > startY + teas.length * 55 + 10 && ty < startY + teas.length * 55 + 55) {
+    var treatY = startY + 5 * rowH + 5;
+    if (ty > treatY && ty < treatY + 36 && tx > W/2 - 150 && tx < W/2 + 150) {
       buyMengpoTreat();
     }
   }
@@ -185,7 +192,7 @@ var ZhongKui = (function() {
         break;
     }
     Audio.play('coin');
-    Renderer.spawnFloatingText(W/2, 300, '+' + tea.name, CO.GHOST_GREEN);
+    Renderer.spawnFloatingText(W/2, 240, '+' + tea.name, CO.GHOST_GREEN);
     // 触发孟婆对话
     if (typeof MengPo !== 'undefined') {
       State.set('mengpoLine', MengPo.getLine('buy'));
@@ -196,7 +203,7 @@ var ZhongKui = (function() {
   function buyMengpoTreat() {
     var coins = State.get('coins');
     if (coins < CONFIG.MENGPO_TREAT_PRICE) {
-      Renderer.spawnFloatingText(W/2, 400, '铜钱不足!', '#FF4444');
+      Renderer.spawnFloatingText(W/2, 300, '铜钱不足!', '#FF4444');
       return;
     }
     State.set('coins', coins - CONFIG.MENGPO_TREAT_PRICE);
@@ -208,7 +215,7 @@ var ZhongKui = (function() {
     favor.exp++;
     var leveled = State.checkFavorLevelUp();
     if (leveled) {
-      Renderer.spawnFloatingText(W/2, 250, '好感升级! Lv.' + favor.level, CO.COPPER_SHINE);
+      Renderer.spawnFloatingText(W/2, 200, '好感升级! Lv.' + favor.level, CO.COPPER_SHINE);
       if (typeof MengPo !== 'undefined') {
         State.set('mengpoLine', MengPo.getLine('levelUp'));
         State.set('mengpoLineTimer', 3);

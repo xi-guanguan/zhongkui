@@ -12,8 +12,8 @@ var Mining = (function() {
   var hookState = HOOK.IDLE;
   var hookAngle = 0;     // 当前摆动角度
   var hookLength = 0;     // 钩子伸出长度
-  var hookMaxLength = H * 0.75;
-  var hookX = W/2, hookY = 120;  // 钩子原点
+  var hookMaxLength = H * 0.6;
+  var hookX = W/2, hookY = 80;  // 钩子原点
   var hookTipX = 0, hookTipY = 0; // 钩子头位置
   var hookDir = 1;  // 摆动方向
   var hookSwingT = 0;
@@ -45,8 +45,8 @@ var Mining = (function() {
     for (var i = 0; i < count; i++) {
       var isBig = Math.random() < MINING_CFG.bigCoinChance;
       coins.push({
-        x: 50 + Math.random() * (W - 100),
-        y: 250 + Math.random() * (H - 400),
+        x: 40 + Math.random() * (W - 80),
+        y: 150 + Math.random() * (H - 250),
         size: isBig ? 20 : 12,
         value: isBig ? 3 : 1,
         rotation: Math.random() * M.PI * 2,
@@ -152,9 +152,9 @@ var Mining = (function() {
 
     // 钟馗/船(顶部)
     ctx.fillStyle = CONFIG.CO.CHAIN;
-    ctx.fillRect(W/2 - 40, 60, 80, 30);
+    ctx.fillRect(W/2 - 30, 40, 60, 20);
     ctx.fillStyle = CONFIG.CO.BONE;
-    ctx.fillRect(W/2 - 3, 45, 6, 18);
+    ctx.fillRect(W/2 - 3, 30, 6, 14);
 
     // 钩绳
     hookTipX = hookX + Math.sin(hookAngle) * hookLength;

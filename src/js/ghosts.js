@@ -8,14 +8,14 @@ var Ghosts = (function() {
 
   // ── 鬼运行时状态 ──
   var ghostX = W/2;
-  var ghostY = 300;
+  var ghostY = 180;
   var ghostSeed = 0;
   var ghostTimer = 0;
 
   // ── 初始化本回合鬼 ──
   function initRound() {
     ghostX = W/2;
-    ghostY = 300;
+    ghostY = CONFIG.LY.GHOST_Y;
     ghostSeed = Math.random() * 100;
     ghostTimer = 0;
   }
@@ -25,29 +25,29 @@ var Ghosts = (function() {
     var ghost = State.currentGhost();
     ghostTimer += dt;
 
-    var arenaLeft = 60, arenaRight = W - 60;
-    var arenaTop = 200, arenaBottom = 600;
+    var arenaLeft = 30, arenaRight = W - 30;
+    var arenaTop = 100, arenaBottom = 280;
 
     switch(ghost.personality) {
       case 'timid': // 牛头：小幅抖动
-        ghostX = W/2 + Math.sin(ghostTimer*3 + ghostSeed) * 15;
-        ghostY = 300 + Math.sin(ghostTimer*2 + ghostSeed*2) * 10;
+        ghostX = W/2 + Math.sin(ghostTimer*3 + ghostSeed) * 20;
+        ghostY = 180 + Math.sin(ghostTimer*2 + ghostSeed*2) * 15;
         break;
       case 'normal': // 马面：匀速漂浮
-        ghostX = W/2 + Math.sin(ghostTimer*1.5 + ghostSeed) * 80;
-        ghostY = 350 + Math.sin(ghostTimer*1 + ghostSeed*2) * 40;
+        ghostX = W/2 + Math.sin(ghostTimer*1.5 + ghostSeed) * 60;
+        ghostY = 180 + Math.sin(ghostTimer*1 + ghostSeed*2) * 40;
         break;
       case 'crazy': // 黑无常：高速乱窜
-        ghostX = W/2 + Math.sin(ghostTimer*5 + ghostSeed) * 130;
-        ghostY = 350 + Math.cos(ghostTimer*4 + ghostSeed*3) * 120;
+        ghostX = W/2 + Math.sin(ghostTimer*5 + ghostSeed) * 100;
+        ghostY = 180 + Math.cos(ghostTimer*4 + ghostSeed*3) * 60;
         break;
       case 'cool': // 白无常：极缓飘动+偶尔闪现
-        ghostX = W/2 + Math.sin(ghostTimer*0.5 + ghostSeed) * 100;
-        ghostY = 350 + Math.sin(ghostTimer*0.3 + ghostSeed*2) * 50;
+        ghostX = W/2 + Math.sin(ghostTimer*0.5 + ghostSeed) * 80;
+        ghostY = 180 + Math.sin(ghostTimer*0.3 + ghostSeed*2) * 30;
         break;
       case 'rage': // 刑天：直线冲撞
-        ghostX = W/2 + Math.sin(ghostTimer*2 + ghostSeed) * 150;
-        ghostY = 300 + Math.abs(Math.sin(ghostTimer*3 + ghostSeed)) * 200;
+        ghostX = W/2 + Math.sin(ghostTimer*2 + ghostSeed) * 110;
+        ghostY = 180 + Math.abs(Math.sin(ghostTimer*3 + ghostSeed)) * 80;
         break;
     }
 
